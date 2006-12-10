@@ -53,7 +53,14 @@ sub new {
 
     $self{fh} = $fh;
     $self{on_disconnect} = sub {
-        $mux->disconnect($fh, 1);
+        
+        # FIXME: Remove when everything is converted.
+        if(UNIVERSAL::can($mux, "_my_send")) {
+            $mux->disconnect($fh);
+        } else {
+            # OLD EventMux
+            $mux->disconnect($fh, 1);
+        }
         waitpid($pid, 0) if $pid;
     };
 
