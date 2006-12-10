@@ -10,6 +10,7 @@ use RPC::Async::Util qw(make_packet append_data read_packet);
 use RPC::Async::Coderef;
 use Data::Dumper;
 
+# FIXME: rename process to something a little more elegant then this.
 my $cfd_rpc = q(
 use warnings;
 use strict;
@@ -152,7 +153,8 @@ sub dump_requests {
 
 sub _handle_read {
     my ($self, $data) = @_;
-
+    
+    # FIXME: Use buffering code in EventMux and remove functions from Util.pm
     append_data(\$self->{buf}, $data);
     while (my $thawed = read_packet(\$self->{buf})) {
         if (ref $thawed eq "ARRAY" and @$thawed >= 1) {
