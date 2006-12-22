@@ -117,7 +117,7 @@ sub _decode_args {
     foreach my $arg (@args) {
         if (not ref $arg) {
             # do nothing
-
+        
         } elsif (ref $arg eq "ARRAY") {
             $self->_decode_args($fh, @$arg);
 

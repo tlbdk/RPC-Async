@@ -209,6 +209,9 @@ sub _encode_args {
                 $h{$key} = $v;
             }
             \%h;
+        } elsif (ref $arg eq "Regexp") {
+           $arg =~ /:(.*)\)$/;
+           $1;
         } elsif (ref $arg eq "REF") {
             my ($v) = $self->_encode_args($$arg);
             \$v;
