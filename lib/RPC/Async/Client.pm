@@ -54,14 +54,7 @@ sub new {
 
     $self{fh} = $fh;
     $self{on_disconnect} = sub {
-        
-        # FIXME: Remove when everything is converted.
-        if(UNIVERSAL::can($mux, "_my_send")) {
-            $mux->disconnect($fh);
-        } else {
-            # OLD EventMux
-            $mux->disconnect($fh, 1);
-        }
+        $mux->kill($fh);
         waitpid($pid, 0) if $pid;
     };
 
@@ -134,7 +127,7 @@ sub io {
             #print "RPC::Async::Client got ", length $event->{data}, " bytes\n";
             $self->_handle_read($event->{data});
 
-        } elsif ($type eq "disconnect") {
+        } elsif ($type eq "closed") {
             die __PACKAGE__ .": server disconnected\n";
         }
 

@@ -231,10 +231,10 @@ sub io {
             eval { $self->_handle_read($fh, $event->{data}) };
             if ($@) {
                 warn __PACKAGE__.": Disconnecting client for error: $@\n";
-                $self->{mux}->disconnect($fh);
+                $self->{mux}->kill($fh);
             }
 
-        } elsif ($type eq "disconnect") {
+        } elsif ($type eq "closed") {
             delete $self->{clients}{$fh};
             #print "Client $fh disconnected; ", int(keys %{$self->{clients}}),
             #        " clients left.\n"
