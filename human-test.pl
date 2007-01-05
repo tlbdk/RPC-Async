@@ -14,7 +14,7 @@ if (@ARGV < 1) {
 my ($server, @server_args) = @ARGV;
 
 my $mux = IO::EventMux->new();
-$mux->add(\*STDIN, LineBuffered => 1);
+$mux->add(\*STDIN, Buffered => ['Split', qr/\n/]);
 
 my $rpc = RPC::Async::Client->new($mux, "perl://$server", @server_args) or die;
 
@@ -47,7 +47,7 @@ while ($stdin_open or $rpc->has_requests) {
             $proc = $1;
 
         } else {
-            print "Invalid line.\n";
+            print "Invalid line: '$line'\n";
             next;
         }
 
