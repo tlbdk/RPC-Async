@@ -1,5 +1,8 @@
-#!/usr/bin/perl -w
+#!/usr/bin/perl
+use lib "lib";
+
 use strict;
+use warnings;
 
 use RPC::Async::Client;
 use IO::EventMux;
