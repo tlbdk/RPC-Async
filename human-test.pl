@@ -24,7 +24,7 @@ while ($stdin_open or $rpc->has_requests) {
     my $event = $rpc->io($mux->mux) or next;
     my $type = $event->{type};
 
-    if ($type eq "disconnect") {
+    if ($type eq "closed") {
         $stdin_open = 0;
 
     } elsif ($type eq "read") {
