@@ -176,7 +176,20 @@ directly.
 
 sub add_client {
     my ($self, $sock) = @_;
-    $self->{mux}->add($sock, LineBuffered => 0);
+    $self->{mux}->add($sock);
+    $self->{clients}{$sock} = 1;
+}
+
+=head2 C<add_listener($socket)>
+
+Add a listening socket. Connections to this socket will be automatically added
+to the internal list of clients. This method is not usually called directly.
+
+=cut
+
+sub add_listener {
+    my ($self, $sock) = @_;
+    $self->{mux}->add($sock, Listen => 1);
     $self->{clients}{$sock} = 1;
 }
 
@@ -222,7 +235,8 @@ sub io {
     my ($self, $event) = @_;
     my $fh = $event->{fh};
 
-    if ($fh and exists $self->{clients}{$fh}) {
+    if ($fh && exists $self->{clients}{$fh} or
+        $event->{type} eq "accepted" && $self->{clients}{$event->{parent_fh}}) {
         my $type = $event->{type};
 
         if ($type eq "read") {
@@ -238,6 +252,9 @@ sub io {
             delete $self->{clients}{$fh};
             #print "Client $fh disconnected; ", int(keys %{$self->{clients}}),
             #        " clients left.\n"
+
+        } elsif ($type eq "accepted") {
+            $self->add_client($fh);
         }
 
         return undef;

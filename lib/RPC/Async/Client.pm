@@ -45,18 +45,21 @@ sub new {
         coderefs => {},
     );
     
-    if ($url !~ /^(perl|perlroot):/) { 
-        die "TODO: Only perl and perlroot protocol implemented";
+    if ($url =~ /^(perl|perlroot):/) { 
+        my ($fh, $pid) = url_connect($url, $cfd_rpc, @args);
+        $mux->add($fh);
+
+        $self{fh} = $fh;
+        $self{on_disconnect} = sub {
+            $mux->kill($fh);
+            waitpid($pid, 0) if $pid;
+        };
+
+    } else {
+        my $fh = url_connect($url, @args);
+        $mux->add($fh);
+        $self{fh} = $fh;
     }
-
-    my ($fh, $pid) = url_connect($url, $cfd_rpc, @args);
-    $mux->add($fh, LineBuffered => 0);
-
-    $self{fh} = $fh;
-    $self{on_disconnect} = sub {
-        $mux->kill($fh);
-        waitpid($pid, 0) if $pid;
-    };
 
     return bless \%self, (ref $class || $class);
 }
