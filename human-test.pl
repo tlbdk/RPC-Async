@@ -67,6 +67,7 @@ sub format_args {
         my $value = $_[$i+1];
         if (ref $value) {
             $value = Dumper($value);
+            $value =~ s/^\$\w+\s*=\s*//;
         }
         $str .= ", " if $i > 0;
         $str .= $_[$i] ."=". $value
