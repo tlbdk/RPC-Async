@@ -136,7 +136,7 @@ sub _decode_args {
                 $self->{mux}->send($fh, make_packet([ $id, "call", @_ ]));
             });
             $arg->set_destroy(sub {
-                #TODO: look in ticket #75
+                return if !$self->{mux};
                 $self->{mux}->send($fh, make_packet([ $id, "destroy" ]));
             });
         }
