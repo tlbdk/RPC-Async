@@ -1,7 +1,7 @@
 #!/usr/bin/perl -w
 use strict;
 
-$VERSION = "1.00";
+our $VERSION = "1.00";
 
 package RPC::Async::Server;
 

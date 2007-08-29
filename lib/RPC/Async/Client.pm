@@ -5,35 +5,12 @@ package RPC::Async::Client;
 
 use Carp;
 use Socket;
-use IO::URL;
 use RPC::Async::Util qw(make_packet append_data read_packet);
 use RPC::Async::Coderef;
 use Data::Dumper;
 
-# FIXME: rename process to something a little more elegant then this.
-my $cfd_rpc = q(
-use warnings;
-use strict;
-use RPC::Async::Server;
-
-my $fd = shift;
-my $module = shift;
-if (not defined $fd) { die "Usage: $0 FILE_DESCRIPTOR MODULE_FILE [ ARGS ]"; }
-
-open my $sock, "+<&=", $fd or die "Cannot open fd $fd\n";
-
-sub init_clients {
-    my ($rpc) = @_;
-    $rpc->add_client($sock);
-}
-
-$0="$module";
-
-do $module or die "Cannot load $module: $@\n";
-);
-
 sub new {
-    my ($class, $mux, $url, @args) = @_;
+    my ($class, $mux, $fh) = @_;
 
     my %self = (
         mux => $mux,
@@ -45,21 +22,8 @@ sub new {
         coderefs => {},
     );
     
-    if ($url =~ /^(perl|perlroot):/) { 
-        my ($fh, $pid) = url_connect($url, $cfd_rpc, @args);
-        $mux->add($fh);
-
-        $self{fh} = $fh;
-        $self{on_disconnect} = sub {
-            $mux->kill($fh);
-            waitpid($pid, 0) if $pid;
-        };
-
-    } else {
-        my $fh = url_connect($url, @args);
-        $mux->add($fh);
-        $self{fh} = $fh;
-    }
+    $mux->add($fh);
+    $self{fh} = $fh;
 
     return bless \%self, (ref $class || $class);
 }
