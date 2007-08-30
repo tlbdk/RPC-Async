@@ -26,7 +26,7 @@ use English;
 use File::Basename;
 
 use base "Exporter";
-our @EXPORT = qw(url_connect url_listen url_explode drop_privileges);
+our @EXPORT = qw(url_connect url_disconnect url_listen url_explode drop_privileges);
 
 use Socket;
 use IO::Socket::INET;
@@ -191,6 +191,11 @@ sub url_connect {
     } else {
         die "Cannot parse url: $url";
     }
+}
+
+sub url_disconnect {
+    my ($fh, $pid) = @_;
+    waitpid $pid, 0 if $pid;
 }
 
 # TODO: add all types

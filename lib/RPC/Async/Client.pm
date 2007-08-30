@@ -69,10 +69,7 @@ sub check_response {
 
 sub disconnect {
     my ($self) = @_;
-
-    if ($self->{on_disconnect}) {
-        $self->{on_disconnect}->($self);
-    }
+    $self->{mux}->kill($self->{fh});
 }
 
 sub has_requests {

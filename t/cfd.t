@@ -7,7 +7,7 @@ use warnings;
 use Test::More tests => 10;
 use RPC::Async::Client;
 use IO::EventMux;
-use IO::URL;
+use RPC::Async::URL;
 use RPC_Async_Test;
 use English;
 
@@ -16,7 +16,7 @@ my $mux = IO::EventMux->new();
 # Set the user for the server to run under.
 $ENV{'IO_URL_USER'} ||= 'root';
 
-my ($fh, @url_data) = url_connect("perl://./test-server.pl", $header);
+my ($fh, $pid) = url_connect("perl://./test-server.pl");
 my $rpc = RPC::Async::Client->new($mux, $fh) or die;
 $rpc->check_request(\&RPC_Async_Test::check_request);
 $rpc->check_response(\&RPC_Async_Test::check_response);
@@ -86,7 +86,5 @@ while ($rpc->has_requests || $rpc->has_coderefs) {
     $rpc->io($event);
 }
 
-url_disconnect($fh, @url_data);
-
-$mux->kill($fh);
-waitpid $pid, 0 if $pid;
+$rpc->disconnect;
+url_disconnect($fh, $pid);
