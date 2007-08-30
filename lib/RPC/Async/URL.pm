@@ -308,11 +308,11 @@ Jonas Jensen <jonas@infopro.dk>, Troels Liebe Bentsen <troels@infopro.dk>
 
 =cut
 
-=head1 COPYRIGHT AND LICENCE
+=head1 COPYRIGHT
 
-Copyright (C) 2006, 2007 Troels Liebe Bentsen
+Copyright(C) 2005-2007 Troels Liebe Bentsen
 
-Copyright (C) 2006, 2007 Jonas Jensen
+Copyright(C) 2005-2007 Jonas Jensen
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

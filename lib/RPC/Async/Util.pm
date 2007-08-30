@@ -73,5 +73,20 @@ sub make_packet($) {
     return pack("N", 4 + length $frozen) . $frozen;
 }
 
+=head1 AUTHOR
+
+Jonas Jensen <jbj@knef.dk>, Troels Liebe Bentsen <tlb@rapanden.dk> 
+
+=head1 COPYRIGHT
+
+Copyright(C) 2005-2007 Troels Liebe Bentsen
+
+Copyright(C) 2005-2007 Jonas Jensen
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut
+
 1;
 # vim: et sw=4 sts=4 tw=80

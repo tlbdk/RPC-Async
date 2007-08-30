@@ -33,13 +33,12 @@ C<use RPC::Async::Server>
 
 =head1 AUTHOR
 
-Troels Liebe Bentsen <tlb@rapanden.dk>
-
-Jonas Jensen <jbj@knef.dk>
+Jonas Jensen <jbj@knef.dk>, Troels Liebe Bentsen <tlb@rapanden.dk> 
 
 =head1 COPYRIGHT
 
 Copyright(C) 2005-2007 Troels Liebe Bentsen
+
 Copyright(C) 2005-2007 Jonas Jensen
 
 This library is free software; you can redistribute it and/or modify
