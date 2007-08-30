@@ -2,6 +2,8 @@ package RPC::Async::Checker;
 use strict;
 use warnings;
 
+# FIXME: SHOULD BE REMOVED
+
 our $VERSION = '1.0';
 
 use base "Exporter";
