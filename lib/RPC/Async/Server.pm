@@ -1,9 +1,9 @@
 #!/usr/bin/perl -w
 use strict;
 
-our $VERSION = "1.00";
-
 package RPC::Async::Server;
+
+our $VERSION = "1.00";
 
 =head1 NAME
 
