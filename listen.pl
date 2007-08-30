@@ -2,7 +2,7 @@
 use strict;
 
 use RPC::Async::Server;
-use IO::URL;
+use RPC::Async::URL;
 
 @ARGV or die "Usage: $0 -u URL MODULE_FILE [ ARGS ]\n";
 

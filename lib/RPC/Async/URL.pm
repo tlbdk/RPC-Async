@@ -4,11 +4,11 @@ our $VERSION = "1.00";
 
 =head1 NAME
 
-IO::URL - Utility functions to handle URLs
+RPC::Async::URL - Utility functions to handle URLs
 
 =head1 SYNOPSIS
 
-    use IO::URL;
+    use RPC::Async::URL;
 
     my $socket1 = url_connect("tcp://1.2.3.4:5678");
     my $socket2 = url_connect("exec://dir/file.pl --my-option");
