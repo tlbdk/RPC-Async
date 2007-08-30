@@ -7,10 +7,11 @@ use Carp;
 use Socket;
 use RPC::Async::Util qw(make_packet append_data read_packet);
 use RPC::Async::Coderef;
+use RPC::Async::URL;
 use Data::Dumper;
 
 sub new {
-    my ($class, $mux, $fh) = @_;
+    my ($class, $mux, $url, @args) = @_;
 
     my %self = (
         mux => $mux,
@@ -21,9 +22,10 @@ sub new {
         check_response => undef,
         coderefs => {},
     );
-    
+    my ($fh, @urlargs) = url_connect($url, @args); 
     $mux->add($fh);
     $self{fh} = $fh;
+    $self{urlargs} = \@urlargs;
 
     return bless \%self, (ref $class || $class);
 }
@@ -70,6 +72,7 @@ sub check_response {
 sub disconnect {
     my ($self) = @_;
     $self->{mux}->kill($self->{fh});
+    url_disconnect($self->{fh}, @{$self->{urlargs}});
 }
 
 sub has_requests {

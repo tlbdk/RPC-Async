@@ -16,8 +16,7 @@ my $mux = IO::EventMux->new();
 # Set the user for the server to run under.
 $ENV{'IO_URL_USER'} ||= 'root';
 
-my ($fh, $pid) = url_connect("perl://./test-server.pl");
-my $rpc = RPC::Async::Client->new($mux, $fh) or die;
+my $rpc = RPC::Async::Client->new($mux, "perl://./test-server.pl") or die;
 $rpc->check_request(\&RPC_Async_Test::check_request);
 $rpc->check_response(\&RPC_Async_Test::check_response);
 
@@ -87,4 +86,3 @@ while ($rpc->has_requests || $rpc->has_coderefs) {
 }
 
 $rpc->disconnect;
-url_disconnect($fh, $pid);

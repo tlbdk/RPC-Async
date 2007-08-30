@@ -50,7 +50,10 @@ of a stream socket.
 sub url_connect {
     my ($url, @args) = @_;
 
-    if ($url =~ m#^tcp://(\d+\.\d+\.\d+\.\d+):(\d+)$#) {
+    if(ref $url ne '') {
+        return $url;
+    
+    } elsif ($url =~ m{^tcp://(\d+\.\d+\.\d+\.\d+):(\d+)$}) {
         my ($ip, $port, $option, $timeout) = ($1, $2, @args);
         return (IO::Socket::INET->new(
             Proto    => 'tcp',
@@ -60,7 +63,7 @@ sub url_connect {
             Timeout  => $timeout,
         ) or die "Connecting to $url: $!");
 
-    } elsif ($url =~ m#^unix(?:_(dgram))?://(.+)$#) {
+    } elsif ($url =~ m{^unix(?:_(dgram))?://(.+)$}) {
         my ($dgram, $file, $nonblocking) = ($1, $2, @args);
         return (IO::Socket::UNIX->new(
             ($dgram?(Type => SOCK_DGRAM):()),
@@ -68,7 +71,7 @@ sub url_connect {
             Peer => $file,
         ) or die "Connecting to $url: $!");
     
-    } elsif ($url =~ m#^udp://(\d+\.\d+\.\d+\.\d+)?:?(\d+)?$#) {
+    } elsif ($url =~ m{^udp://(\d+\.\d+\.\d+\.\d+)?:?(\d+)?$}) {
         my ($ip, $port, $option) = ($1, $2, @args);
         return (IO::Socket::INET->new(
             Proto    => 'udp',
@@ -79,7 +82,7 @@ sub url_connect {
         ) or die "Connecting to $url: $!");
 
        
-    } elsif ($url =~ m#^(perl|perlroot|open2perl|open2perlroot)://(.+)$#) {
+    } elsif ($url =~ m{^(perl|perlroot|open2perl|open2perlroot)://(.+)$}) {
         my ($type, $path, $header, @callargs) = ($1, $2, @args);
         
         if(!defined $header) {
@@ -155,7 +158,7 @@ sub url_connect {
             return $parent;
         }
 
-    } elsif ($url =~ m#^(open2)://(.+)$#) {
+    } elsif ($url =~ m{^(open2)://(.+)$}) {
         my ($dir, $file) = ($1, $2);
         my ($type, $cmd, @callargs) = ($1, $2, @args);
         
@@ -177,17 +180,13 @@ sub url_connect {
         close $writerERR;
         return ($readerOUT, $readerERR, $pid);
     
-    } elsif ($url =~ m#^cfd://(\d+)$#) {
+    } elsif ($url =~ m{^cfd://(\d+)$}) {
         my ($fd) = ($1);
 
         open my $sock, "+<&=", $fd
             or die "Listening on $url: $!";
         return $sock;
     
-    } elsif ($url =~ m#^fh://$#) {
-        my ($fh) = (@args);
-        return $fh;
-        
     } else {
         die "Cannot parse url: $url";
     }
