@@ -167,7 +167,7 @@ sub _encode_args {
             }
             \%h;
         } elsif (ref $arg eq "Regexp") {
-           #FIXME: Copy over regexp options /ig etc.
+           #TODO: Copy over regexp options /ig etc.
            $arg =~ /:(.*)\)$/;
            $1;
         } elsif (ref $arg eq "REF") {
