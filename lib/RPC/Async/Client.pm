@@ -114,7 +114,7 @@ sub dump_requests {
 sub _handle_read {
     my ($self, $data) = @_;
     
-    # FIXME: Use buffering code in EventMux and remove functions from Util.pm
+    # TODO: Use buffering code in EventMux and remove functions from Util.pm
     append_data(\$self->{buf}, $data);
     while (my $thawed = read_packet(\$self->{buf})) {
         if (ref $thawed eq "ARRAY" and @$thawed >= 1) {
