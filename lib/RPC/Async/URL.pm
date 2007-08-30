@@ -244,7 +244,7 @@ sub url_listen {
 
 =head2 B<drop_privileges()>
 
-Drops privileges to the user defined in $ENV{'IO_URL_USER'} 
+Drops privileges to the user defined in $ENV{'RPC_ASYNC_URL_USER'} 
 or the caller if called with sudo.
 
 =cut
@@ -257,8 +257,8 @@ sub drop_privileges {
         return ($UID, $GID);
     }
     
-    my $user = $ENV{SUDO_USER} || $ENV{IO_URL_USER}
-        or die "IO_URL_USER environment variable not set";
+    my $user = $ENV{SUDO_USER} || $ENV{RPC_ASYNC_URL_USER}
+        or die "RPC_ASYNC_URL_USER environment variable not set";
 
     my ($uid, $gid, $home, $shell) = (getpwnam($user))[2,3,7,8];
     
