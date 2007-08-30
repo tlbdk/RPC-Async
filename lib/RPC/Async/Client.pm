@@ -204,7 +204,12 @@ sub io {
     }
 }
 
-# For debugging
+=item dump_requests
+
+Returns a string documenting what requests are pending. For debugging only.
+
+=cut
+
 sub dump_requests {
     my ($self) = @_;
     return Dumper($self->{requests});
@@ -287,10 +292,6 @@ sub _encode_args {
 
 =back
 
-=cut
-
-1;
-
 =head1 AUTHOR
 
 Troels Liebe Bentsen <tlb@rapanden.dk>, Jonas Jensen <jbj@knef.dk>
@@ -304,5 +305,7 @@ This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
 
 =cut
+
+1;
 
 # vim: et sw=4 sts=4 tw=80
