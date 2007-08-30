@@ -31,12 +31,7 @@ our @EXPORT = qw(url_connect url_disconnect url_listen url_explode drop_privileg
 use Socket;
 use IO::Socket::INET;
 
-# FIXME: Do we need this anymore, arch seemes not to need it.
-#require "syscall.ph";
-
 # FIXME: update documentation to reflect changes.
-# FIXME: Rename to IO::Socket::URL
-# FIXME: Use Carp instead of die???
 
 =head2 B<url_connect($url)>
 
@@ -61,7 +56,7 @@ sub url_connect {
             PeerPort => $port,
             Blocking => ($option?0:1),
             Timeout  => $timeout,
-        ) or die "Connecting to $url: $!");
+        ) or carp "Connecting to $url: $!");
 
     } elsif ($url =~ m{^unix(?:_(dgram))?://(.+)$}) {
         my ($dgram, $file, $nonblocking) = ($1, $2, @args);
@@ -69,7 +64,7 @@ sub url_connect {
             ($dgram?(Type => SOCK_DGRAM):()),
             Blocking  => ($nonblocking?0:1),
             Peer => $file,
-        ) or die "Connecting to $url: $!");
+        ) or carp "Connecting to $url: $!");
     
     } elsif ($url =~ m{^udp://(\d+\.\d+\.\d+\.\d+)?:?(\d+)?$}) {
         my ($ip, $port, $option) = ($1, $2, @args);
@@ -79,14 +74,14 @@ sub url_connect {
             ($ip?(PeerAddr => $ip):()),
             ($port?(PeerPort => $port):()),
             Blocking => ($option?0:1),
-        ) or die "Connecting to $url: $!");
+        ) or carp "Connecting to $url: $!");
 
        
     } elsif ($url =~ m{^(perl|perlroot|open2perl|open2perlroot)://(.+)$}) {
         my ($type, $path, $header, @callargs) = ($1, $2, @args);
         
         if(!defined $header) {
-            # FIXME: rename process to something a little more elegant then this.
+            # TODO: rename process to something a little more elegant then this.
             $header = q(
             use warnings;
             use strict;
@@ -138,7 +133,7 @@ sub url_connect {
             my ($file, $dir) = fileparse $path;
 
             chdir $dir;
-            # FIXME: Do diff against default and only add what is not std. 
+            # TODO: Do diff against default and only add what is not std. 
             exec 'perl', (map { '-I'.$_ } @INC), "-we", $header, 
             fileno($child), 
                 $file, @callargs;
@@ -188,7 +183,7 @@ sub url_connect {
         return $sock;
     
     } else {
-        die "Cannot parse url: $url";
+        carp "Cannot parse url: $url";
     }
 }
 
@@ -201,7 +196,7 @@ sub url_disconnect {
 sub url_explode {
     my ($url) = @_;
 
-    if ($url =~ m#^(tcp|udp)://(\d+\.\d+\.\d+\.\d+):(\d+)$#) {
+    if ($url =~ m{^(tcp|udp)://(\d+\.\d+\.\d+\.\d+):(\d+)$}) {
         return ($1,$2,$3);
     }
     
@@ -211,7 +206,7 @@ sub url_explode {
 sub url_listen {
     my ($url, $nonblocking) = @_;
     
-    if ($url =~ m#^tcp://(\d+\.\d+\.\d+\.\d+):(\d+)$#) {
+    if ($url =~ m{^tcp://(\d+\.\d+\.\d+\.\d+):(\d+)$}) {
         my ($ip, $port) = ($1, $2);
         return (IO::Socket::INET->new(
             Proto     => 'tcp',
@@ -220,9 +215,9 @@ sub url_listen {
             Blocking  => ($nonblocking?0:1),
             ReuseAddr => 1,
             Listen    => 5,
-        ) or die "Listening to $url: $!");
+        ) or carp "Listening to $url: $!");
 
-    } elsif ($url =~ m#^unix(?:_(dgram))?://(.+)$#) {
+    } elsif ($url =~ m{^unix(?:_(dgram))?://(.+)$}) {
         my ($dgram, $file) = ($1, $2);
         unlink($file);
         return (IO::Socket::UNIX->new(
@@ -230,9 +225,9 @@ sub url_listen {
             (!$dgram?(Listen => 5):()),
             Blocking  => ($nonblocking?0:1),
             Local => $file,
-        ) or die "Listening to $url: $!");
+        ) or carp "Listening to $url: $!");
 
-    } elsif ($url =~ m#^udp://(\d+\.\d+\.\d+\.\d+)?:?(\d+)?$#) {
+    } elsif ($url =~ m{^udp://(\d+\.\d+\.\d+\.\d+)?:?(\d+)?$}) {
         my ($ip, $port) = ($1, $2);
         return (IO::Socket::INET->new(
             Proto     => 'udp',
@@ -240,14 +235,12 @@ sub url_listen {
             ($port?(LocalPort => $port):()),
             Blocking  => ($nonblocking?0:1),
             ReuseAddr => 1,
-        ) or die "Listening to $url: $!");
+        ) or carp "Listening to $url: $!");
         
     } else {
-        die "Cannot parse url: $url";
+        carp "Cannot parse url: $url";
     }
-
 }
-
 
 =head2 B<drop_privileges()>
 
@@ -278,7 +271,7 @@ sub drop_privileges {
     $ENV{HOME} = $home;
     $ENV{SHELL} = $shell;
 
-    # FIXME add groups the the user we change to are in.
+    # TODO add groups the the user we change to are in.
     my @gids = ();
     # Find out what pointer types to try with for gid_t(little og big endian)
     my @p = ((unpack("c2", pack ("i", 1)))[0] == 1 ? ("v", "V", "i") 
@@ -317,9 +310,9 @@ Jonas Jensen <jonas@infopro.dk>, Troels Liebe Bentsen <troels@infopro.dk>
 
 =head1 COPYRIGHT AND LICENCE
 
-Copyright (C) 2006 Troels Liebe Bentsen
+Copyright (C) 2006, 2007 Troels Liebe Bentsen
 
-Copyright (C) 2006 Jonas Jensen
+Copyright (C) 2006, 2007 Jonas Jensen
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
