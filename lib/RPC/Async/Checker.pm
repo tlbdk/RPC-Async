@@ -1,7 +1,8 @@
-#!/usr/bin/perl -w
-use strict;
-
 package RPC::Async::Checker;
+use strict;
+use warnings;
+
+our $VERSION = '1.0';
 
 use base "Exporter";
 

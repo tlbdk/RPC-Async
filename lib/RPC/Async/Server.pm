@@ -1,9 +1,8 @@
-#!/usr/bin/perl -w
-use strict;
-
 package RPC::Async::Server;
+use strict;
+use warnings;
 
-our $VERSION = "1.00";
+our $VERSION = '1.00';
 
 =head1 NAME
 

@@ -1,6 +1,8 @@
 package RPC::Async::URL;
+use strict;
+use warnings;
 
-our $VERSION = "1.00";
+our $VERSION = '1.00';
 
 =head1 NAME
 
@@ -17,8 +19,6 @@ RPC::Async::URL - Utility functions to handle URLs
 
 =cut
 
-use strict;
-use warnings;
 use Carp;
 
 use Fcntl;

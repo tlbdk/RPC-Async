@@ -1,8 +1,8 @@
-#!/usr/bin/env perl
+package RPC::Async::Client;
 use strict;
 use warnings;
 
-package RPC::Async::Client;
+our $VERSION = '1.0';
 
 use Carp;
 use Socket;

@@ -1,7 +1,8 @@
-#!/usr/bin/perl -wc
-use strict;
-
 package RPC::Async::Coderef;
+use strict;
+use warnings;
+
+our $VERSION = '1.0';
 
 =head1 NAME
 
