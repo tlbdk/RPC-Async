@@ -33,7 +33,7 @@ RPC::Async::Server - server side of asynchronous RPC framework
 
 This module provides the magic that hides the details of doing asynchronous RPC
 on the server side. It does not dictate how to implement initialisation or main
-loop, although it requires the application to use IO::EventMux or emulate it.
+loop, although it requires the application to use IO::EventMux.
 
 When creating a new C<RPC::Async::Server> object with the C<new> method, you
 are also telling it what package it should invoke callback functions in. If the

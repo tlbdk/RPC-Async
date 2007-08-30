@@ -4,12 +4,61 @@ use warnings;
 
 our $VERSION = '1.0';
 
+=head1 NAME
+
+RPC::Async::Client - client side of asynchronous RPC framework
+
+=head1 SYNOPSIS
+
+  use RPC::Async::Client;
+  use IO::EventMux;
+  
+  my $mux = IO::EventMux->new;
+  my $rpc = RPC::Async::Client->new($mux, "perl://add-server.pl");
+  # or # my $rpc = RPC::Async::Client->new($mux, "tcp://127.0.0.1:1234");
+
+  $rpc->add_numbers(n1 => 2, n2 => 3,
+      sub {
+          my %reply = @_;
+          print "2 + 3 = $reply{sum}\n";
+      });
+  
+  while ($rpc->has_requests || $rpc->has_coderefs) {
+      my $event = $rpc->io($mux->mux) or next;
+  }
+
+  $rpc->disconnect;
+  
+=head1 DESCRIPTION
+
+This module provides the magic that hides the details of doing asynchronous RPC
+on the client side. It does not dictate how to implement initialisation or main
+loop, although it requires the application to use L<IO::EventMux>.
+
+The procedures made available by the remote server can be called directly on the
+L<RPC::Async::Client> instance or via the C<call()> method where they are
+further documented.
+
+=head1 METHODS
+
+=over
+
+=cut
+
 use Carp;
 use Socket;
 use RPC::Async::Util qw(make_packet append_data read_packet);
 use RPC::Async::Coderef;
 use RPC::Async::URL;
 use Data::Dumper;
+
+=item new($mux, $url, @urlargs)
+
+Connects to an RPC server via the URL given in $url. Such URLs can be of the
+forms specified in L<RPC::Async::URL>, although it must connect to a
+bi-directional stream socket. Alternatively, pass an open file descriptor.
+
+=cut
 
 sub new {
     my ($class, $mux, $url, @args) = @_;
@@ -42,6 +91,23 @@ sub AUTOLOAD {
     return $self->call($procedure, @_);
 }
 
+=item call($procedure, @args, $subref)
+
+Performs a remote procedure call. Rather than using this directly, this package
+enables some AUTOLOAD magic that allows calls to remote procedures directly on
+the L<RPC::Async::Client> instance.
+
+Arguments are passed in key/value style by convention, although any arguments
+may be given. The last argument a remote procedure call is a subroutine
+reference to be executed upon completion of the call. This framework makes no
+guarantees as to when, if ever, this sub will be called. Specifically, remote
+procedures may return in a different order than they were called in.
+
+Fairly complex data structures may be given as arguments, except for circular
+ones. In particular, subroutine references are allowed.
+
+=cut
+
 sub call {
     my ($self, $procedure, @args) = @_;
     my $callback = pop @args;
@@ -70,21 +136,53 @@ sub check_response {
     $_[0]->{check_response};
 }
 
+=item disconnect
+
+Call this to gracefully disconnect from the server without leaving zombie
+processes or such.
+
+=cut
+
 sub disconnect {
     my ($self) = @_;
     $self->{mux}->kill($self->{fh});
     url_disconnect($self->{fh}, @{$self->{urlargs}});
 }
 
+=item has_requests
+
+Returns true iff there is at least one request pending. Usually, this means that
+we should not terminate yet.
+
+=cut
+
 sub has_requests {
     my ($self, $event) = @_;
     return scalar %{$self->{requests}};
 }
 
+=item has_coderefs
+
+Returns true if the remote side holds a reference to a subroutine given to it
+in an earlier call. Depending on the application, this may be taken as a hint
+that we should not terminate yet. This information is obtained via interaction
+with Perl's garbage collector on the server side.
+
+=cut
+
 sub has_coderefs {
     my ($self, $event) = @_;
     return scalar %{$self->{coderefs}};
 }
+
+=item io($event)
+
+Inspect an event from EventMux. All such events must be passed through here in
+order to handle asynchronous replies. If the event was handled, C<undef> is
+returned. Otherwise, the event is returned for processing by other
+RPC::Async::Client handlers or the main program itself.
+
+=cut
 
 sub io {
     my ($self, $event) = @_;
@@ -186,6 +284,10 @@ sub _encode_args {
         }
     } @args;
 }
+
+=back
+
+=cut
 
 1;
 
