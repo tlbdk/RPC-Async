@@ -3,7 +3,7 @@ use warnings;
 
 package RPC::Async;
 
-our $VERSION = "1.00";
+our $VERSION = "1.01";
 
 1;
 

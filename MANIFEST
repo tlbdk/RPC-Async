@@ -20,3 +20,5 @@ t/cfd.t
 t/pod-coverage.t.skip
 t/pod.t
 test-server.pl
+RPC_Async_Test.pm
+ChangeLog
