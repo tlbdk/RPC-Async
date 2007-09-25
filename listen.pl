@@ -1,5 +1,6 @@
-#!/usr/bin/perl -wI lib
+#!/usr/bin/env perl
 use strict;
+use warnings;
 
 use RPC::Async::Server;
 use RPC::Async::URL;

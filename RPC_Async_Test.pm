@@ -1,5 +1,6 @@
-#!/usr/bin/perl -cw
+#!/usr/bin/env perl -c
 use strict;
+use warnings;
 
 package RPC_Async_Test;
 

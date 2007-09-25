@@ -1,6 +1,4 @@
-#!/usr/bin/perl
-use lib "lib";
-
+#!/usr/bin/env perl
 use strict;
 use warnings;
 
