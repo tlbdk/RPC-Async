@@ -4,7 +4,7 @@ use warnings;
 
 # FIXME: SHOULD BE REMOVED
 
-our $VERSION = '1.0';
+our $VERSION = '1.02';
 
 use base "Exporter";
 

@@ -1,2 +1,7 @@
+Version 1.02 (Sun Oct 7 2007)
+ * Use exec($^X, '...') to invoke a new perl, as the environment perl might not
+   be the same as the one we where invoked with. Suggested by David Cantrell.
+ * Bumped version on all modules to match new release.
+
 Version 1.01 (Tue Sep 4 2007)
  * Add missing file to manifest

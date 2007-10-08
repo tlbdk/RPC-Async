@@ -2,7 +2,7 @@ package RPC::Async::URL;
 use strict;
 use warnings;
 
-our $VERSION = '1.00';
+our $VERSION = '1.02';
 
 =head1 NAME
 
