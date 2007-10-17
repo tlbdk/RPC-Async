@@ -106,6 +106,9 @@ procedures may return in a different order than they were called in.
 Fairly complex data structures may be given as arguments, except for circular
 ones. In particular, subroutine references are allowed.
 
+The call itself is given a uniq id that is returned and can later be used
+with other subs.
+
 =cut
 
 sub call {
@@ -124,6 +127,8 @@ sub call {
 
     #print "RPC::Async::Client sending: $id $procedure @args\n";
     $self->{mux}->send($self->{fh}, make_packet([ $id, $procedure, @args ]));
+
+    return $id;
 }
 
 sub check_request {
@@ -215,9 +220,59 @@ sub dump_requests {
     return Dumper($self->{requests});
 }
 
+=item wait($timeout, [@ids])
+
+Block until we have enough events from the RPC server to matches all the
+id's listed or we get a timeout. If no id's are given then any id will be 
+used. This function can be useful when we want to make sure the server is 
+started in the other end, fx. if we need to connect to it on another socket. 
+
+If all events was received in time, 1 is returned, C<undef> is returned on 
+timeout.
+
+Any unrelated events will be buffered and pushed back on the stack when the
+wait call has finished.
+
+=cut
+
+sub wait {
+    my ($self, $timeout, @ids) = @_;
+    my %match = map { $_ => 1 } @ids;
+    my $count = (int @ids or 1);
+    my $mux = $self->{mux};
+     
+    # Set timeout only on our own fh.
+    $mux->timeout($self->{fh}, $timeout);
+    my @events;
+    while($count and my $event = $mux->mux()) {
+        if ($event->{fh} and $event->{fh} == $self->{fh}) {
+            if ($event->{type} eq "read") {
+                foreach my $id ($self->_handle_read($event->{data})) {
+                    if(exists $match{$id} or @ids == 0) {
+                        $count--;
+                    }
+                }
+
+            } elsif($event->{type} eq 'timeout') {
+                last;
+
+            } elsif ($event->{type} eq "closed") {
+                die __PACKAGE__ .": server disconnected\n";
+            }
+
+        } else {
+            push @events, $event;
+        }
+    }
+
+    $mux->push_event(@events);
+    return $count > 0?undef:1;
+}
+
 sub _handle_read {
     my ($self, $data) = @_;
-    
+    my @ids;
+
     # TODO: Use buffering code in EventMux and remove functions from Util.pm
     append_data(\$self->{buf}, $data);
     while (my $thawed = read_packet(\$self->{buf})) {
@@ -225,6 +280,7 @@ sub _handle_read {
             my ($id, @args) = @$thawed;
             my $callback = delete $self->{requests}{$id};
             # TODO: test check_response
+            push(@ids, $id);
 
             if (defined $callback) {
                 #print __PACKAGE__, ": callback(@args)\n";
@@ -247,6 +303,8 @@ sub _handle_read {
             warn __PACKAGE__.": Bad data in thawed packet";
         }
     }
+    
+    return @ids;
 }
 
 sub _unique_id {
