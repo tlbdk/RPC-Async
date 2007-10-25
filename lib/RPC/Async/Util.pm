@@ -1,10 +1,8 @@
-#!/usr/bin/env perl
+package RPC::Async::Util;
 use strict;
 use warnings;
 
 our $VERSION = '1.02';
-
-package RPC::Async::Util;
 
 use base "Exporter";
 use Class::ISA;
