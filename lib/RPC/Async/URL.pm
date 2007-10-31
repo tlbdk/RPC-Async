@@ -99,7 +99,7 @@ sub url_connect {
             
             $0="$module";
             
-            do $module or die "Cannot load $module: $@\n";
+            do $module or die "Cannot load $module or $module did not return 1: $@\n";
             );
         }
 
