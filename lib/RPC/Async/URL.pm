@@ -214,7 +214,7 @@ sub url_listen {
             LocalPort => $port,
             Blocking  => ($nonblocking?0:1),
             ReuseAddr => 1,
-            Listen    => 5,
+            Listen    => SOMAXCONN,
         ) or carp "Listening to $url: $!");
 
     } elsif ($url =~ m{^unix(?:_(dgram))?://(.+)$}) {
@@ -222,7 +222,7 @@ sub url_listen {
         unlink($file);
         return (IO::Socket::UNIX->new(
             ($dgram?(Type => SOCK_DGRAM):()),
-            (!$dgram?(Listen => 5):()),
+            (!$dgram?(Listen => SOMAXCONN):()),
             Blocking  => ($nonblocking?0:1),
             Local => $file,
         ) or carp "Listening to $url: $!");
