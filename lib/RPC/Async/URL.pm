@@ -26,7 +26,8 @@ use English;
 use File::Basename;
 
 use base "Exporter";
-our @EXPORT = qw(url_connect url_disconnect url_listen url_explode drop_privileges);
+our @EXPORT = qw(url_connect url_disconnect url_listen url_explode 
+    url_absolute drop_privileges);
 
 use Socket;
 use IO::Socket::INET;
@@ -56,7 +57,7 @@ sub url_connect {
             PeerPort => $port,
             Blocking => ($option?0:1),
             Timeout  => $timeout,
-        ) or carp "Connecting to $url: $!");
+        ) or croak "Connecting to $url: $!");
 
     } elsif ($url =~ m{^unix(?:_(dgram))?://(.+)$}) {
         my ($dgram, $file, $nonblocking) = ($1, $2, @args);
@@ -64,7 +65,7 @@ sub url_connect {
             ($dgram?(Type => SOCK_DGRAM):()),
             Blocking  => ($nonblocking?0:1),
             Peer => $file,
-        ) or carp "Connecting to $url: $!");
+        ) or croak "Connecting to $url: $!");
     
     } elsif ($url =~ m{^udp://(\d+\.\d+\.\d+\.\d+)?:?(\d+)?$}) {
         my ($ip, $port, $option) = ($1, $2, @args);
@@ -74,7 +75,7 @@ sub url_connect {
             ($ip?(PeerAddr => $ip):()),
             ($port?(PeerPort => $port):()),
             Blocking => ($option?0:1),
-        ) or carp "Connecting to $url: $!");
+        ) or croak "Connecting to $url: $!");
 
        
     } elsif ($url =~ m{^(perl|perlroot|open2perl|open2perlroot)://(.+)$}) {
@@ -95,6 +96,7 @@ sub url_connect {
             sub init_clients {
                 my ($rpc) = @_;
                 $rpc->add_client($sock);
+                return $sock;
             }
             
             $0="$module";
@@ -183,7 +185,27 @@ sub url_connect {
         return $sock;
     
     } else {
-        carp "Cannot parse url: $url";
+        croak "Cannot parse url: $url";
+    }
+}
+
+# Make path absolute
+sub url_absolute {
+    my ($cwd, @urls) = @_;
+    
+    my @results;
+    foreach my $url (@urls) {
+        if($url =~ /^([^:]+\:\/\/)(.+)$/) {
+            push(@results, "$1$cwd/$2");
+        } else {
+            return undef;
+        }
+    }
+    
+    if(wantarray) {
+        return @results;
+    } else {
+        return $results[0];
     }
 }
 
@@ -215,7 +237,7 @@ sub url_listen {
             Blocking  => ($nonblocking?0:1),
             ReuseAddr => 1,
             Listen    => SOMAXCONN,
-        ) or carp "Listening to $url: $!");
+        ) or croak "Listening to $url: $!");
 
     } elsif ($url =~ m{^unix(?:_(dgram))?://(.+)$}) {
         my ($dgram, $file) = ($1, $2);
@@ -225,7 +247,7 @@ sub url_listen {
             (!$dgram?(Listen => SOMAXCONN):()),
             Blocking  => ($nonblocking?0:1),
             Local => $file,
-        ) or carp "Listening to $url: $!");
+        ) or croak "Listening to $url: $!");
 
     } elsif ($url =~ m{^udp://(\d+\.\d+\.\d+\.\d+)?:?(\d+)?$}) {
         my ($ip, $port) = ($1, $2);
@@ -235,10 +257,10 @@ sub url_listen {
             ($port?(LocalPort => $port):()),
             Blocking  => ($nonblocking?0:1),
             ReuseAddr => 1,
-        ) or carp "Listening to $url: $!");
+        ) or croak "Listening to $url: $!");
         
     } else {
-        carp "Cannot parse url: $url";
+        croak "Cannot parse url: $url";
     }
 }
 
