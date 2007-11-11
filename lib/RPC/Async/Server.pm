@@ -258,7 +258,7 @@ sub io {
             $self->add_client($fh);
         }
 
-        return undef;
+        return;
 
     } else {
         return $event;

@@ -198,7 +198,7 @@ sub url_absolute {
         if($url =~ /^([^:]+\:\/\/)(.+)$/) {
             push(@results, "$1$cwd/$2");
         } else {
-            return undef;
+            return;
         }
     }
     
@@ -222,7 +222,7 @@ sub url_explode {
         return ($1,$2,$3);
     }
     
-    return undef;
+    return;
 }
 
 sub url_listen {

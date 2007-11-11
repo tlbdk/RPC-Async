@@ -202,7 +202,7 @@ sub io {
             die __PACKAGE__ .": server disconnected\n";
         }
 
-        return undef;
+        return;
 
     } else {
         return $event;

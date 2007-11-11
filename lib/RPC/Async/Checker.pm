@@ -10,7 +10,7 @@ use base "Exporter";
 
 our @EXPORT_OK = qw(check_named_args);
 
-sub check_named_args($$@) {
+sub check_named_args {
     my ($checks, $procedure, @args) = @_;
 
     # TODO: check @args too

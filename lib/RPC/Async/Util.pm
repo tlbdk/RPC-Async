@@ -12,7 +12,7 @@ our @EXPORT_OK = qw(call append_data read_packet make_packet);
 
 {
 my %sub_pointers = (); # TODO: does this improve performance?
-sub call($$@) {
+sub call {
     my ($package, $sub, @args) = @_;
 
     my $fqsub = "$package\::$sub";
@@ -33,12 +33,12 @@ sub call($$@) {
     if ($ptr) {
         return $ptr->(@args);
     } else {
-        return undef;
+        return;
     }
 }
 }
 
-sub append_data($$) {
+sub append_data {
     my ($buf, $data) = @_;
 
     if (not defined $$buf) {
@@ -48,7 +48,7 @@ sub append_data($$) {
     }
 }
 
-sub read_packet($) {
+sub read_packet {
     my ($buf) = @_;
 
     return if not defined $$buf or length $$buf < 4;
@@ -67,7 +67,7 @@ sub read_packet($) {
     return thaw $frozen;
 }
 
-sub make_packet($) {
+sub make_packet {
     my ($ref) = @_;
 
     my $frozen = nfreeze($ref);
