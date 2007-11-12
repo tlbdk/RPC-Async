@@ -24,10 +24,11 @@ use Carp;
 use Fcntl;
 use English;
 use File::Basename;
+use Privileges::Drop;
 
 use base "Exporter";
 our @EXPORT = qw(url_connect url_disconnect url_listen url_explode 
-    url_absolute drop_privileges);
+    url_absolute);
 
 use Socket;
 use IO::Socket::INET;
@@ -130,7 +131,11 @@ sub url_connect {
                 open STDERR, ">&", $writerERR or die;
             }
             
-            if($type !~ /perlroot/) { drop_privileges(); }
+            if($type !~ /perlroot/) { 
+                my $user = $ENV{SUDO_USER} || $ENV{RPC_ASYNC_URL_USER}
+                    or die "RPC_ASYNC_URL_USER environment variable not set";
+                drop_privileges($user);
+            }
 
             my ($file, $dir) = fileparse $path;
 
@@ -262,66 +267,6 @@ sub url_listen {
     } else {
         croak "Cannot parse url: $url";
     }
-}
-
-=head2 B<drop_privileges()>
-
-Drops privileges to the user defined in $ENV{'RPC_ASYNC_URL_USER'} 
-or the caller if called with sudo.
-
-=cut
-
-sub drop_privileges {
-    # Check if we are root and stop if we are not.
-    if($UID != 0 and $EUID != 0 
-            and $GID != 0 and $EGID != 0) {
-        
-        return ($UID, $GID);
-    }
-    
-    my $user = $ENV{SUDO_USER} || $ENV{RPC_ASYNC_URL_USER}
-        or die "RPC_ASYNC_URL_USER environment variable not set";
-
-    my ($uid, $gid, $home, $shell) = (getpwnam($user))[2,3,7,8];
-    
-    if(!defined $uid or !defined $gid) {
-        die("Could not find uid and gid user:$user");
-    }
-    
-    $ENV{USER} = $user;
-    $ENV{LOGNAME} = $user;
-    $ENV{HOME} = $home;
-    $ENV{SHELL} = $shell;
-
-    # TODO add groups the the user we change to are in.
-    my @gids = ();
-    # Find out what pointer types to try with for gid_t(little og big endian)
-    my @p = ((unpack("c2", pack ("i", 1)))[0] == 1 ? ("v", "V", "i") 
-        : ("n", "N", "i"));
-    foreach my $c (@p) {
-        # FIXME: can be generated with "cd /usr/include;find . -name '*.h' -print | xargs h2ph"
-        require "sys/syscall.ph";
-        my $res = syscall (&SYS_setgroups, @gids+0, pack ("$c*", @gids));
-        if($res == -1) {
-            die("Could not clear groups: $!");
-        }
-    } 
-
-    foreach(1..2) {
-        $UID = $uid;
-        $GID = $gid;
-        $EUID = $uid;
-        $EGID = "$gid $gid";
-    }
-
-    if($UID != $uid or $EUID != $uid 
-            or $GID != $gid or $EGID != $gid) {
-        
-        die("Could not set current uid:$UID, gid:$GID, euid=$EUID, egid=$EGID "
-            ."to uid:$uid, gid:$gid");
-    }
-
-    return ($uid, $gid);
 }
 
 1;
