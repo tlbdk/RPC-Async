@@ -131,10 +131,13 @@ sub url_connect {
                 open STDERR, ">&", $writerERR or die;
             }
             
-            if($type !~ /perlroot/) { 
-                my $user = $ENV{SUDO_USER} || $ENV{RPC_ASYNC_URL_USER}
-                    or die "RPC_ASYNC_URL_USER environment variable not set";
-                drop_privileges($user);
+            if($type !~ /perlroot/) {
+                # FIXME: This should be done by drop_privileges function
+                if($UID == 0 or $GID == 0) {
+                    my $user = $ENV{SUDO_USER} || $ENV{RPC_ASYNC_URL_USER}
+                        or die "RPC_ASYNC_URL_USER environment variable not set";
+                    drop_privileges($user);
+                }
             }
 
             my ($file, $dir) = fileparse $path;
