@@ -52,6 +52,12 @@ sub url_connect {
     
     } elsif ($url =~ m{^tcp://(\d+\.\d+\.\d+\.\d+):(\d+)$}) {
         my ($ip, $port, $option, $timeout) = ($1, $2, @args);
+        
+        # Check if option and timeout is set at the same time
+        if($option and $timeout) { 
+            croak "Can't both have non-blocking and timeout";
+        }
+        
         return (IO::Socket::INET->new(
             Proto    => 'tcp',
             PeerAddr => $ip,
