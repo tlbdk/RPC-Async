@@ -85,8 +85,8 @@ sub url_connect {
         ) or croak "Connecting to $url: $!");
 
        
-    } elsif ($url =~ m{^(perl|perlroot|open2perl|open2perlroot)://(.+)$}) {
-        my ($type, $path, $header, @callargs) = ($1, $2, @args);
+    } elsif ($url =~ m{^(perl|perlroot|perl2|perlroot2)(header)?://(.+)$}) {
+        my ($type, $path, $header, @callargs) = ($1, $3, $2, @args);
         
         if(!defined $header) {
             # TODO: rename process to something a little more elegant then this.
@@ -110,6 +110,8 @@ sub url_connect {
             
             do $module or die "Cannot load $module or $module did not return 1: $@\n";
             );
+        } else {
+            $header = shift @args;
         }
 
         -e "$path" or die "File $path does not exist\n";
