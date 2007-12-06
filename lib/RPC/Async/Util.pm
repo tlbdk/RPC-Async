@@ -7,6 +7,7 @@ our $VERSION = '1.02';
 use base "Exporter";
 use Class::ISA;
 use Storable qw(nfreeze thaw);
+use Misc::Common qw(treewalk); # FIXME: Don't release before this is a real module
 
 our @EXPORT_OK = qw(append_data read_packet make_packet expand);
 
@@ -14,18 +15,29 @@ our @EXPORT_OK = qw(append_data read_packet make_packet expand);
 # http://www.w3.org/TR/xmlschema-2/ Good source of data types
 # FIXME: Write expand function for handling input/output defs like:
 #          'uid|gid|euid|egid' =>  { uid => .... }
-#
-#          'latin1' => latin1string
-#          'str|string|utf8' => utf8string
-#          '(u)(integer|int)32?|longlong' => $1"integer64";
-#          '(u)(integer|int)32?|long'     => $1."integer32";
-#          '(u)(integer|int)16?|short'    => $1."integer16";
-#          '(u)(integer|int)8?|byte|char' => $1."integer8";
-#          'float'                        => 'float32';
-#          'double|float64'               => 'float64';
-#          'bin|data' => 'binary',
 sub expand {
     my ($ref) = @_;
+    
+    treewalk($ref,
+        sub {
+            split /\|/, ${$_[0]};
+        }, 
+        sub{ 
+            no warnings 'uninitialized'; # So we can use $1 even when we got no match
+            ${$_[0]} =~ s/^(?:latin1)/latin1string/;
+            ${$_[0]} =~ s/^(?:str(?:ing)?)|(:?utf8)/utf8string/;
+            ${$_[0]} =~ s/^(?:(u)?int(?:eger)?(?:8))|(?:byte)|(?:char)/$1integer8/;
+            ${$_[0]} =~ s/^(?:(u)?int(?:eger)?(?:16))|(?:short)/$1integer16/;
+            ${$_[0]} =~ s/^(?:(u)?int(?:eger)?(?:(:)|(?:32)|$))|(?:long)/$1integer32$2/; # Default to 32bit
+            ${$_[0]} =~ s/^(?:(u)?int(?:eger)?(?:64))|(?:longlong)/$1integer64/;
+            ${$_[0]} =~ s/^(?:float)?(?:(:)|(?:32)|$)/float32$1/; # Default to 32bit
+            ${$_[0]} =~ s/^(?:float64)|(?:double)/float64$1/;
+            ${$_[0]} =~ s/^(?:bin)|(?:data)/binary/;
+            ${$_[0]} =~ s/^(?:bool)/boolean/;
+        } 
+    );
+    
+
     return $ref;
 }
 
