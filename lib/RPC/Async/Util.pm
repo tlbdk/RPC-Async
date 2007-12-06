@@ -8,34 +8,13 @@ use base "Exporter";
 use Class::ISA;
 use Storable qw(nfreeze thaw);
 
-our @EXPORT_OK = qw(call append_data read_packet make_packet);
+our @EXPORT_OK = qw(append_data read_packet make_packet expand);
 
-{
-my %sub_pointers = (); # TODO: does this improve performance?
-sub call {
-    my ($package, $sub, @args) = @_;
-
-    my $fqsub = "$package\::$sub";
-    my $ptr = $sub_pointers{$fqsub};
-
-    if (exists $sub_pointers{$fqsub}) {
-        $ptr = $sub_pointers{$fqsub};
-
-    } else {
-        #print "RPC::Async::Util: First call to $fqsub\n";
-        $ptr = UNIVERSAL::can($package, $sub);
-        if (!$ptr) {
-            warn "No sub '$sub' in package '$package'";
-        }
-        $sub_pointers{$fqsub} = $ptr;
-    }
-
-    if ($ptr) {
-        return $ptr->(@args);
-    } else {
-        return;
-    }
-}
+# FIXME: Write expand function for handling input/output defs like:
+#          'uid|gid|euid|egid' => 'int'
+sub expand {
+    my ($ref) = @_;
+    return $ref;
 }
 
 sub append_data {

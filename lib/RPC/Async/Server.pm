@@ -78,7 +78,7 @@ client.
 =cut
 
 use IO::EventMux;
-use RPC::Async::Util qw(make_packet append_data read_packet call);
+use RPC::Async::Util qw(make_packet append_data read_packet expand);
 use RPC::Async::Coderef;
 
 =head2 C<new($mux [, $package])>
@@ -151,13 +151,53 @@ sub _handle_read {
 
     while (my $thawed = read_packet(\$self->{buf})) {
         if (ref $thawed eq "ARRAY" and @$thawed >= 2) {
-            my ($id, $procedure, @args) = @$thawed;
-
+            my ($id, $method, @args) = @$thawed;
+            
             if (!$self->{check_request}
-                    or $self->{check_request}->($procedure, @args)) {
-                my $caller = [ $fh, $id, $procedure ];
+                    or $self->{check_request}->($method, @args)) {
+                my $caller = [ $fh, $id, $method ];
                 $self->_decode_args($fh, @args);
-                call($self->{package}, "rpc_$procedure", $caller, @args);
+                
+                # Set main ref and package ref to package if not main.
+                my $main = \%main::;
+                my $package = $self->{package} eq 'main'
+                    ? $main : $main->{$self->{package}};
+
+                # Check if the method exists and call it 
+                if(exists $package->{"rpc_$method"}) {
+                    # Get code refrence back
+                    my $sub = *{$package->{"rpc_$method"}}{CODE};
+                    if($sub) {
+                        $sub->($caller, @args);
+                    }
+                
+                } elsif($method eq 'methods') {
+                    my %methods = map { $_ => {} } 
+                        grep {$_ =~ /^rpc_/} keys %{$package};
+                    my %opt = @args;
+                    if($opt{defs}) {
+                        foreach my $method (keys %methods) {
+                            $method =~ /^rpc_(.+)/;
+                            if(exists $package->{"def_$1"}) {
+                                my $sub = *{$package->{"def_$1"}}{CODE};
+                                if($sub) {
+                                    $methods{$method}{in}
+                                        = expand($sub->($caller, 1));
+                                    $methods{$method}{out}
+                                        = expand($sub->($caller, 0));
+                                    
+                                } else {
+                                    print "Could not find sub def_$1\n";
+                                }
+                            }
+                        }
+                    }
+                    $self->return($caller, methods => \%methods);
+                    
+                } else {
+                    warn "No sub '$method' in package '$self->{package}'";
+                }
+
             } else {
                 die "check_request failed\n";
             }
