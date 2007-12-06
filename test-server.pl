@@ -17,13 +17,15 @@ while ($rpc->has_clients()) {
 
 print "RPC server: all clients gone\n";
 
-sub def_add_numbers { $_[1] ? { n1 => 'int', n2 => 'int' } : { sum => 'int' }; }
+# Named parameter with positional information
+sub def_add_numbers { $_[1] ? { n1 => '1:int', n2 => '2:int' } : { sum => 'int' }; }
 sub rpc_add_numbers {
     my ($caller, %args) = @_;
     my $sum = $args{n1} + $args{n2};
     $rpc->return($caller, sum => $sum);
 }
 
+# Named parameter with positional information as order is used
 sub def_get_id { $_[1] ? { } : { 'uid|gid|euid|egid' => 'int' }; }
 sub rpc_get_id {
     my ($caller) = @_;
@@ -31,7 +33,8 @@ sub rpc_get_id {
 	    euid => $EUID, egid => $EGID);
 }
 
-sub def_callback { $_[1] ? { calls => 'int', callback => 'sub' } : { }; }
+# Named parameter with positional information
+sub def_callback { $_[1] ? { calls => '1:int', callback => '2:sub' } : { }; }
 sub rpc_callback {
     my ($caller, %args) = @_;
     my ($count, $wrap) = @args{qw(calls callback)};
