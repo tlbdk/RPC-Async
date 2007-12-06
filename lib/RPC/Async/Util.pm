@@ -13,14 +13,19 @@ our @EXPORT_OK = qw(append_data read_packet make_packet expand);
 
 
 # http://www.w3.org/TR/xmlschema-2/ Good source of data types
-# FIXME: Write expand function for handling input/output defs like:
-#          'uid|gid|euid|egid' =>  { uid => .... }
 sub expand {
-    my ($ref) = @_;
+    my ($ref, $in) = @_;
     
     treewalk($ref,
-        sub {
-            split /\|/, ${$_[0]};
+        sub { 
+            if($in and ${$_[0]} =~ s/^(.+?)_(\d+)$/$2$1/) {
+                return ${$_[0]};
+            } elsif($in) {
+                my $count = 0;
+                return map { sprintf "%02d$_", $count++ } split /\|/, ${$_[0]};
+            } else {
+                return split /\|/, ${$_[0]};
+            }
         }, 
         sub{ 
             no warnings 'uninitialized'; # So we can use $1 even when we got no match

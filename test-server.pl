@@ -17,7 +17,7 @@ while ($rpc->has_clients()) {
 
 print "RPC server: all clients gone\n";
 
-# Named parameter with positional information
+# Named parameter with positional information because of name
 sub def_add_numbers { $_[1] ? { n1 => 'int', n2 => 'int' } : { sum => 'int' }; }
 sub rpc_add_numbers {
     my ($caller, %args) = @_;
@@ -35,7 +35,7 @@ sub rpc_get_id {
 }
 
 # Named parameter with positional information
-sub def_callback { $_[1] ? { calls_1 => 'int', callback_2 => 'sub' } : { }; }
+sub def_callback { $_[1] ? { calls_01 => 'int', callback_02 => 'sub' } : { }; }
 sub rpc_callback {
     my ($caller, %args) = @_;
     my ($count, $wrap) = @args{qw(calls callback)};
@@ -49,13 +49,13 @@ sub rpc_callback {
 }
 
 sub def_complicated {{ 
-        array_of_int_1 => ['int'], 
-        array_of_string_2 => ['string'], 
-        array_of_bool_3 => ['bool'], 
-        array_of_any_4 => [''],
-        array_of_hash_any_5 => [{}],
-        array_of_hash_string_6 => [{ keyname => 'string' }],
-        complicated_7 => {
+        array_of_int_01 => ['int'], 
+        array_of_string_02 => ['string'], 
+        array_of_bool_03 => ['bool'], 
+        array_of_any_04 => [''],
+        array_of_hash_any_05 => [{}],
+        array_of_hash_string_06 => [{ keyname => 'string' }],
+        complicated_07 => {
             'results|persons' => [{
                 name => 'string',
                 age => 'long',

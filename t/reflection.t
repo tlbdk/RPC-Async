@@ -1,13 +1,9 @@
 use strict;
 use warnings;
 
-use Test::More tests => 1;
+use Test::More tests => 2;
 use RPC::Async::Client;
 use IO::EventMux;
-use English;
-use Data::Dumper;
-
-pass "Skip for now"; exit;
 
 my $mux = IO::EventMux->new();
 
@@ -18,13 +14,13 @@ my $rpc = RPC::Async::Client->new($mux, "perl://./test-server.pl") or die;
 
 $rpc->methods(defs => 1, sub {
     my (%ans) = @_;
-    print Dumper(\%ans)
-    #foreach my $method (keys %{$ans{methods}}) {
-    #    print "$method\n";
-    #}
-
+    #use Data::Dumper;
+    #print Dumper(\%ans);
+    is($ans{methods}{rpc_callback}{in}{'01calls'}, 'integer32', 
+        "Check that rpc_callback was converted");
+    is($ans{methods}{rpc_get_id}{out}{'egid'}, 'integer32:pos', 
+        "Check that rpc_get_id was converted");
 });
-
 
 while ($rpc->has_requests) {
     my $event = $mux->mux;

@@ -182,7 +182,7 @@ sub _handle_read {
                                 my $sub = *{$package->{"def_$1"}}{CODE};
                                 if($sub) {
                                     $methods{$method}{in}
-                                        = expand($sub->($caller, 1));
+                                        = expand($sub->($caller, 1), 1);
                                     $methods{$method}{out}
                                         = expand($sub->($caller, 0));
                                     
