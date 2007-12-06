@@ -53,16 +53,17 @@ sub def_complicated {{
         array_of_string_2 => ['string'], 
         array_of_bool_3 => ['bool'], 
         array_of_any_4 => [''],
-        array_of_hash_any_5 => [{ '' }],
+        array_of_hash_any_5 => [{}],
         array_of_hash_string_6 => [{ keyname => 'string' }],
         complicated_7 => {
-            results => [{
+            'results|persons' => [{
                 name => 'string',
-                age => 'int',
+                age => 'long',
+                largeint => 'int64',
             }],
             has_error => 'bool',
             error => {
-                errornum => 'int',
+                errornum => 'byte',
                 errorstr => 'string',
             }
         }
