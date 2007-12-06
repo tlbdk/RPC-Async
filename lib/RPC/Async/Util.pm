@@ -10,8 +10,20 @@ use Storable qw(nfreeze thaw);
 
 our @EXPORT_OK = qw(append_data read_packet make_packet expand);
 
+
+# http://www.w3.org/TR/xmlschema-2/ Good source of data types
 # FIXME: Write expand function for handling input/output defs like:
-#          'uid|gid|euid|egid' => 'int'
+#          'uid|gid|euid|egid' =>  { uid => .... }
+#
+#          'latin1' => latin1string
+#          'str|string|utf8' => utf8string
+#          '(u)(integer|int)32?|longlong' => $1"integer64";
+#          '(u)(integer|int)32?|long'     => $1."integer32";
+#          '(u)(integer|int)16?|short'    => $1."integer16";
+#          '(u)(integer|int)8?|byte|char' => $1."integer8";
+#          'float'                        => 'float32';
+#          'double|float64'               => 'float64';
+#          'bin|data' => 'binary',
 sub expand {
     my ($ref) = @_;
     return $ref;
