@@ -18,15 +18,16 @@ while ($rpc->has_clients()) {
 print "RPC server: all clients gone\n";
 
 # Named parameter with positional information
-sub def_add_numbers { $_[1] ? { n1 => '1:int', n2 => '2:int' } : { sum => 'int' }; }
+sub def_add_numbers { $_[1] ? { n1 => 'int', n2 => 'int' } : { sum => 'int' }; }
 sub rpc_add_numbers {
     my ($caller, %args) = @_;
     my $sum = $args{n1} + $args{n2};
     $rpc->return($caller, sum => $sum);
 }
 
-# Named parameter with positional information as order is used
-sub def_get_id { $_[1] ? { } : { 'uid|gid|euid|egid' => 'int' }; }
+# Named parameter with positional information, as order is used.
+# Also optional parameter for type int, pos given as sub type that will be returned to the user
+sub def_get_id { $_[1] ? { } : { 'uid|gid|euid|egid' => 'int:pos' }; }
 sub rpc_get_id {
     my ($caller) = @_;
     $rpc->return($caller, uid => $UID, gid => $GID, 
@@ -34,7 +35,7 @@ sub rpc_get_id {
 }
 
 # Named parameter with positional information
-sub def_callback { $_[1] ? { calls => '1:int', callback => '2:sub' } : { }; }
+sub def_callback { $_[1] ? { calls_1 => 'int', callback_2 => 'sub' } : { }; }
 sub rpc_callback {
     my ($caller, %args) = @_;
     my ($count, $wrap) = @args{qw(calls callback)};
@@ -46,5 +47,30 @@ sub rpc_callback {
         $callback->call($count);
     }
 }
+
+sub def_complicated {{ 
+        array_of_int_1 => ['int'], 
+        array_of_string_2 => ['string'], 
+        array_of_bool_3 => ['bool'], 
+        array_of_any_4 => [''],
+        array_of_hash_any_5 => [{ '' }],
+        array_of_hash_string_6 => [{ keyname => 'string' }],
+        complicated_7 => {
+            results => [{
+                name => 'string',
+                age => 'int',
+            }],
+            has_error => 'bool',
+            error => {
+                errornum => 'int',
+                errorstr => 'string',
+            }
+        }
+};}
+sub rpc_complicated {
+    my ($caller, %args) = @_;
+    $rpc->return($caller, %args);
+}
+
 
 1;
