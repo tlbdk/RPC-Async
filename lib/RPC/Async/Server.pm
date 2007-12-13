@@ -172,14 +172,13 @@ sub _handle_read {
                     }
                 
                 } elsif($method eq 'methods') {
-                    my %methods = map { $_ => {} } 
+                    my %methods = map { /^rpc_(.+)/; $1 => {} }
                         grep {$_ =~ /^rpc_/} keys %{$package};
                     my %opt = @args;
                     if($opt{defs}) {
                         foreach my $method (keys %methods) {
-                            $method =~ /^rpc_(.+)/;
-                            if(exists $package->{"def_$1"}) {
-                                my $sub = *{$package->{"def_$1"}}{CODE};
+                            if(exists $package->{"def_$method"}) {
+                                my $sub = *{$package->{"def_$method"}}{CODE};
                                 if($sub) {
                                     $methods{$method}{in}
                                         = expand($sub->($caller, 1), 1);

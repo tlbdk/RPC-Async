@@ -16,10 +16,10 @@ $rpc->methods(defs => 1, sub {
     my (%ans) = @_;
     #use Data::Dumper;
     #print Dumper(\%ans);
-    is($ans{methods}{rpc_callback}{in}{'01calls'}, 'integer32', 
-        "Check that rpc_callback was converted");
-    is($ans{methods}{rpc_get_id}{out}{'egid'}, 'integer32:pos', 
-        "Check that rpc_get_id was converted");
+    is($ans{methods}{callback}{in}{'01calls'}, 'integer32', 
+        "Check that callback was converted");
+    is($ans{methods}{get_id}{out}{'egid'}, 'integer32:pos', 
+        "Check that get_id was converted");
 });
 
 while ($rpc->has_requests) {
