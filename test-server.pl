@@ -15,7 +15,7 @@ while ($rpc->has_clients()) {
     $rpc->io($mux->mux);
 }
 
-print "RPC server: all clients gone\n";
+#print "RPC server: all clients gone\n";
 
 # Named parameter with positional information because of name
 sub def_add_numbers { $_[1] ? { n1 => 'int', n2 => 'int' } : { sum => 'int' }; }
