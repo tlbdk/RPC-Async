@@ -234,11 +234,11 @@ sub url_disconnect {
 sub url_explode {
     my ($url) = @_;
 
-    if ($url =~ m{^(tcp|udp)://(\d+\.\d+\.\d+\.\d+):(\d+)$}) {
+    if ($url =~ m{^(tcp|udp)://(\d+\.\d+\.\d+\.\d+)?:?(\d+)?$}) {
         return ($1,$2,$3);
+    } else {
+        return;
     }
-    
-    return;
 }
 
 sub url_listen {
