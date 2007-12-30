@@ -25,6 +25,14 @@ sub rpc_add_numbers {
     $rpc->return($caller, sum => $sum);
 }
 
+# Named parameter with positional information because of name
+sub def_sum { $_[1] ? { numbers => ['int'] } : { sum => 'int' }; }
+sub rpc_sum {
+    my ($caller, %args) = @_;
+    my $sum += $_ foreach @{$args{numbers}};
+    $rpc->return($caller, sum => $sum);
+}
+
 # Named parameter with positional information, as order is used.
 # Also optional parameter for type int, pos given as sub type that will be returned to the user
 sub def_get_id { $_[1] ? { } : { 'uid|gid|euid|egid' => 'int:pos' }; }
