@@ -5,7 +5,6 @@ use Test::More tests => 10;
 use RPC::Async::Client;
 use IO::EventMux;
 use RPC::Async::URL;
-use RPC_Async_Test;
 use English;
 
 my $mux = IO::EventMux->new();
@@ -14,11 +13,11 @@ my $mux = IO::EventMux->new();
 $ENV{'IO_URL_USER'} ||= 'root';
 
 my $rpc = RPC::Async::Client->new($mux, "perl://./test-server.pl") or die;
-$rpc->check_request(\&RPC_Async_Test::check_request);
-$rpc->check_response(\&RPC_Async_Test::check_response);
 
-eval { $rpc->no_such_method(0); };
-ok($@, "Invalid method call gives error");
+$rpc->no_such_method(0, sub {
+    my (%ans) = @_;
+    ok(defined $ans{errors}, "Invalid method call gives error");
+});
 
 sub test_add {
     my ($n1, $n2) = @_;

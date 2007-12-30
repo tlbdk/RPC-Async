@@ -2,7 +2,7 @@ package RPC::Async::Client;
 use strict;
 use warnings;
 
-our $VERSION = '1.02';
+our $VERSION = '1.03';
 
 =head1 NAME
 
@@ -68,8 +68,6 @@ sub new {
         requests => {},
         serial => -1,
         buf => undef,
-        check_request => undef,
-        check_response => undef,
         coderefs => {},
     );
     my ($fh, @urlargs) = url_connect($url, @args); 
@@ -115,11 +113,6 @@ sub call {
     my ($self, $procedure, @args) = @_;
     my $callback = pop @args;
 
-    if ($self->{check_request}
-            and not $self->{check_request}->($procedure, @args)) {
-        croak "Invalid procedure or arguments in call to $procedure\n";
-    }
-
     @args = $self->_encode_args(@args);
 
     my $id = $self->_unique_id;
@@ -129,16 +122,6 @@ sub call {
     $self->{mux}->send($self->{fh}, make_packet([ $id, $procedure, @args ]));
 
     return $id;
-}
-
-sub check_request {
-    $_[0]->{check_request} = $_[1] if @_ > 1;
-    $_[0]->{check_request};
-}
-
-sub check_response {
-    $_[0]->{check_response} = $_[1] if @_ > 1;
-    $_[0]->{check_response};
 }
 
 =item disconnect
@@ -279,7 +262,7 @@ sub _handle_read {
         if (ref $thawed eq "ARRAY" and @$thawed >= 1) {
             my ($id, @args) = @$thawed;
             my $callback = delete $self->{requests}{$id};
-            # TODO: test check_response
+            
             push(@ids, $id);
 
             if (defined $callback) {

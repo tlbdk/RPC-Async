@@ -2,7 +2,7 @@ package RPC::Async::URL;
 use strict;
 use warnings;
 
-our $VERSION = '1.02';
+our $VERSION = '1.03';
 
 =head1 NAME
 
@@ -13,9 +13,10 @@ RPC::Async::URL - Utility functions to handle URLs
     use RPC::Async::URL;
 
     my $socket1 = url_connect("tcp://1.2.3.4:5678");
-    my $socket2 = url_connect("exec://dir/file.pl --my-option");
-
-=head1 METHODS
+    my $socket2 = url_connect("open://dir/file.pl", "--my-option");
+    my ($stdout, $stderr) = url_connect("open2://dir/file.pl", "--my-option");
+    my ($socket3) = url_connect("unix://mysocket.sock");
+    my ($socket4) = url_connect("perl://perlsrvd.pl");
 
 =cut
 
@@ -33,14 +34,22 @@ our @EXPORT = qw(url_connect url_disconnect url_listen url_explode
 use Socket;
 use IO::Socket::INET;
 
-# FIXME: update documentation to reflect changes.
+=head1 METHODS
+
+=cut
 
 =head2 B<url_connect($url)>
 
-Turns an URL into a socket. Currently supported schemes are tcp://HOST:PORT and
-exec://SHELL_COMMAND. A program executed with exec will have the option
---connected_fd=NUMBER on its command line, where NUMBER is the file descriptor
-of a stream socket.
+Turns an URL into a socket. Currently supported schemes are:
+ * (tcp|udp)://HOST:PORT, Returns a udp of tcp socket.
+ * (unix|unix_dgram)://path/file.sock, Returns a unix domain socket connection.
+ * (perl|perlroot|perl2|perlroot2)(header)?://path/file.pl, Starts a new perl
+   and loads a default header unless it ends in header, then first argument is
+   used as header. It also connects a socket between the two and returns that. 
+   Urls with 2 in the end also returns $pid, stdout and stderr. Urls with root 
+   in them does not drop root privilages after starting the process the others 
+   will.
+ * open2://file, run file and return stdout, stderr and the $pid.
 
 =cut
 
@@ -205,7 +214,12 @@ sub url_connect {
     }
 }
 
-# Make path absolute
+=head2 B<url_absolute($cwd, @urls)>
+
+Make urls paths absolute, by adding $cwd to all urls.
+
+=cut
+
 sub url_absolute {
     my ($cwd, @urls) = @_;
     
@@ -225,12 +239,23 @@ sub url_absolute {
     }
 }
 
+=head2 B<url_disconnect($cwd, @urls)>
+
+Wait for url to disconnect
+
+=cut
+
 sub url_disconnect {
     my ($fh, $pid) = @_;
     waitpid $pid, 0 if $pid;
 }
 
-# TODO: add all types
+=head2 B<url_explode($cwd, @urls)>
+
+Explode URL components into smaller bits, only supports tcp and udp.
+
+=cut
+
 sub url_explode {
     my ($url) = @_;
 
@@ -240,6 +265,13 @@ sub url_explode {
         return;
     }
 }
+
+=head2 B<url_listen($cwd, @urls)>
+
+Same as connect, just returns a listening socket instead. Only tcp://, udp://
+and unix:// supported.
+
+=cut
 
 sub url_listen {
     my ($url, $nonblocking) = @_;

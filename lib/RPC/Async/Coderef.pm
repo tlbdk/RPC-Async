@@ -2,7 +2,7 @@ package RPC::Async::Coderef;
 use strict;
 use warnings;
 
-our $VERSION = '1.02';
+our $VERSION = '1.03';
 
 =head1 NAME
 
@@ -12,6 +12,14 @@ discarded on the client side when garbage collected on the server side
 =cut
 
 use IO::EventMux;
+
+=head1 METHODS
+
+=head2 B<new($id)>
+
+Constructs a new coderef object.
+
+=cut
 
 sub new {
     my ($class, $id) = @_;
@@ -25,20 +33,44 @@ sub new {
     return bless \%self, (ref $class || $class);
 }
 
+=head2 B<id()>
+
+Return id
+
+=cut
+
 sub id {
     my ($self) = @_;
     $self->{id};
 }
+
+=head2 B<set_call($call)>
+
+Set callback function
+
+=cut
 
 sub set_call {
     my ($self, $call) = @_;
     $self->{call} = $call;
 }
 
+=head2 B<set_destroy($destroy)>
+
+Set destroy function
+
+=cut
+
 sub set_destroy {
     my ($self, $destroy) = @_;
     $self->{destroy} = $destroy;
 }
+
+=head2 B<call(@args)>
+
+Call callback function with @args
+
+=cut
 
 sub call {
     my ($self, @args) = @_;

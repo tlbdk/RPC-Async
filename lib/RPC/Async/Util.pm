@@ -2,7 +2,13 @@ package RPC::Async::Util;
 use strict;
 use warnings;
 
-our $VERSION = '1.02';
+our $VERSION = '1.03';
+
+=head1 NAME
+
+RPC::Async::Util - util module of the asynchronous RPC framework
+
+=cut
 
 use base "Exporter";
 use Class::ISA;
@@ -11,8 +17,19 @@ use Misc::Common qw(treewalk); # FIXME: Don't release before this is a real modu
 
 our @EXPORT_OK = qw(append_data read_packet make_packet expand);
 
+=head1 METHODS
 
-# http://www.w3.org/TR/xmlschema-2/ Good source of data types
+=over
+
+=cut
+
+=item expand($ref, $in)
+
+Expands and normalizes the def_* input and output definitions to a unified
+order and naming convention.
+
+=cut
+
 sub expand {
     my ($ref, $in) = @_;
     
@@ -41,10 +58,15 @@ sub expand {
             ${$_[0]} =~ s/^(?:bool)/boolean/;
         } 
     );
-    
 
     return $ref;
 }
+
+=item append_data($buf, $data)
+
+Function for buffering data.
+
+=cut
 
 sub append_data {
     my ($buf, $data) = @_;
@@ -55,6 +77,12 @@ sub append_data {
         $$buf .= $data;
     }
 }
+
+=item read_packet($buf)
+
+Reads the next packet and thaws it if enough data has been received.
+
+=cut
 
 sub read_packet {
     my ($buf) = @_;
@@ -75,12 +103,20 @@ sub read_packet {
     return thaw $frozen;
 }
 
+=item make_packet($ref)
+
+Generate a packet for sending.
+
+=cut
+
 sub make_packet {
     my ($ref) = @_;
 
     my $frozen = nfreeze($ref);
     return pack("N", 4 + length $frozen) . $frozen;
 }
+
+=back
 
 =head1 AUTHOR
 
