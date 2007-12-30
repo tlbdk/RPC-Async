@@ -1,3 +1,6 @@
+Version 1.05 (Sun Dec 30 2007)
+ * Add Build.PL requirement for Privileges::Drop module
+
 Version 1.04 (Sun Dec 30 2007)
  * Added function treewalk() from unreleased module
 

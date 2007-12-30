@@ -9,6 +9,8 @@ WriteMakefile
           'VERSION_FROM' => 'lib/RPC/Async.pm',
           'PREREQ_PM' => {
                            'Test::More' => 0,
+                           'File::Basename' => 0,
+                           'Privileges::Drop' => 0,
                            'IO::EventMux' => '1.0'
                          }
         )

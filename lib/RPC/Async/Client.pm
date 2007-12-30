@@ -2,7 +2,7 @@ package RPC::Async::Client;
 use strict;
 use warnings;
 
-our $VERSION = '1.04';
+our $VERSION = '1.05';
 
 =head1 NAME
 
@@ -50,7 +50,6 @@ use Socket;
 use RPC::Async::Util qw(make_packet append_data read_packet);
 use RPC::Async::Coderef;
 use RPC::Async::URL;
-use Data::Dumper;
 
 =item new($mux, $url, @urlargs)
 
@@ -200,6 +199,7 @@ Returns a string documenting what requests are pending. For debugging only.
 
 sub dump_requests {
     my ($self) = @_;
+    use Data::Dumper;
     return Dumper($self->{requests});
 }
 

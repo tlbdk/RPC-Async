@@ -14,7 +14,9 @@ my $builder = Module::Build->new(
         'Test::More' => 0,
     },
     requires => { 
-        'IO::EventMux' => '1.0'
+        'IO::EventMux' => '1.0',
+        'Privileges::Drop' => 0,
+        'File::Basename' => 0,
     },
     add_to_cleanup => [ 
         'RPC-Async-*',
