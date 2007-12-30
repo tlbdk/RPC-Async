@@ -1,3 +1,6 @@
+Version 1.04 (Sun Dec 30 2007)
+ * Added function treewalk() from unreleased module
+
 Version 1.03 (Sun Dec 30 2007)
  * Use new syntax for perl.*// protocol, so replacing the header is now a
    special case.

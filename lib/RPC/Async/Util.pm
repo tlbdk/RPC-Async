@@ -2,7 +2,7 @@ package RPC::Async::Util;
 use strict;
 use warnings;
 
-our $VERSION = '1.03';
+our $VERSION = '1.04';
 
 =head1 NAME
 
@@ -13,7 +13,6 @@ RPC::Async::Util - util module of the asynchronous RPC framework
 use base "Exporter";
 use Class::ISA;
 use Storable qw(nfreeze thaw);
-use Misc::Common qw(treewalk); # FIXME: Don't release before this is a real module
 
 our @EXPORT_OK = qw(append_data read_packet make_packet expand);
 
@@ -114,6 +113,68 @@ sub make_packet {
 
     my $frozen = nfreeze($ref);
     return pack("N", 4 + length $frozen) . $frozen;
+}
+
+#use Misc::Common qw(treewalk); # FIXME: Put in own module instead
+
+=item treewalk($tree, $replace_key, $replace_value)
+
+Sub used to walk a tree structure.
+
+=cut
+
+sub treewalk {
+    my ($tree, $replace_key, $replace_value) = @_;
+    $replace_key = $replace_key?$replace_key:sub{};
+    $replace_value = $replace_value?$replace_value:sub{};
+
+    my @walk = ($tree);
+    while(my $branch = shift @walk) {
+        if(ref($branch) eq 'HASH') {
+            foreach my $key (keys %{$branch}) {
+                my $newkey = $key;
+                if(my @results = grep { $_ } $replace_key->(\$newkey)) {
+                    if(@results > 1) {
+                        if (ref($branch->{$newkey}) eq '') {
+                            $replace_value->(\$branch->{$key});
+                            foreach my $result (@results) {
+                                $branch->{$result} = $branch->{$key};
+                            }
+                        } else {
+                            foreach my $result (@results) {
+                                $branch->{$result} = $branch->{$key};
+                            }
+                        }
+                        $newkey = $results[0];
+                        delete($branch->{$key});
+
+                    } elsif($newkey ne $key) {
+                        $branch->{$newkey} = $branch->{$key};
+                        delete($branch->{$key});
+                    }
+                }
+
+                if (ref($branch->{$newkey}) eq 'HASH') {
+                    push(@walk, $branch->{$newkey});
+                } elsif (ref($branch->{$newkey}) eq 'ARRAY') {
+                    push(@walk, $branch->{$newkey});
+                } else {
+                    $replace_value->(\$branch->{$newkey});
+                }
+
+            }
+        } elsif(ref($branch) eq 'ARRAY') {
+            for(my $i=0;$i<int(@{$branch});$i++) { 
+                if(ref($branch->[$i]) eq 'ARRAY') {
+                    push(@walk, $branch->[$i]);
+                } elsif(ref($branch->[$i]) eq 'HASH') {
+                    push(@walk, $branch->[$i]);
+                } else {
+                    $replace_value->(\$branch->[$i]);
+                }
+            }
+        }
+    }
 }
 
 =back
