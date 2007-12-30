@@ -1,4 +1,4 @@
-Version 1.03 (Sun Oct 7 2007)
+Version 1.03 (Sun Dec 30 2007)
  * Use new syntax for perl.*// protocol, so replacing the header is now a
    special case.
  * Remove deprecated checker framework.

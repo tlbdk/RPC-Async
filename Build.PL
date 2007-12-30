@@ -3,12 +3,13 @@ use warnings;
 use Module::Build;
 
 my $builder = Module::Build->new(
-    module_name       => 'RPC::Async',
-    license           => 'perl',
-    dist_author       => 'Jonas Jensen <jonas@infopro.dk>'
+    module_name        => 'RPC::Async',
+    license            => 'perl',
+    dist_author        => 'Jonas Jensen <jonas@infopro.dk>'
                         .',Troels Liebe Bentsen <troels@infopro.dk>',
-    dist_version_from => 'lib/RPC/Async.pm',
-    create_readme     => 1,
+    dist_version_from  => 'lib/RPC/Async.pm',
+    create_readme      => 1,
+    create_makefile_pl => 'traditional',
     build_requires => {
         'Test::More' => 0,
     },

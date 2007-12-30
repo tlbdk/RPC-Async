@@ -1,11 +1,10 @@
+MANIFEST			This list of files
 Build.PL
-checkers/SNMP.pm
-checkers/Test.pm
+ChangeLog
 examples/client.pl
 examples/server.pl
 human-test.pl
 lib/RPC/Async.pm
-lib/RPC/Async/Checker.pm
 lib/RPC/Async/Client.pm
 lib/RPC/Async/Coderef.pm
 lib/RPC/Async/Server.pm
@@ -13,12 +12,13 @@ lib/RPC/Async/URL.pm
 lib/RPC/Async/Util.pm
 listen.pl
 Makefile.PL
-MANIFEST			This list of files
 META.yml
 README
 t/cfd.t
-t/pod-coverage.t.skip
+t/critic.t
+t/perlcriticrc
+t/pod-coverage.t
 t/pod.t
+t/reflection.t
 test-server.pl
-RPC_Async_Test.pm
-ChangeLog
+wsdldump.pl
