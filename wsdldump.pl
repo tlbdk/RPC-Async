@@ -11,6 +11,22 @@ my $target_namespace = 'http://soap.netlookup.dk/test';
 #
 # FIXME: http://msdn2.microsoft.com/en-us/library/ms996486.aspx#understand_topic2
 
+my %types = (
+    integer8   => 'byte',
+    integer16  => 'short',
+    integer32  => 'int',
+    integer64  => 'long',
+    float32    => 'float',
+    float64    => 'double',
+    uinteger8  => 'unsignedByte',
+    uinteger16 => 'unsignedShort',
+    uinteger32 => 'unsignedInt',
+    uinteger64 => 'unsignedLong',
+    boolean    => 'boolean',
+    utf8string => 'string',
+);
+
+
 my $wsdl_header = 
 qq{<?xml version="1.0" encoding="utf-8"?>
 <wsdl:definitions name="netlookup"
@@ -62,7 +78,7 @@ $rpc->methods(defs => 1, sub {
     my (%ans) = @_;
     my $proxy = "testd";
     my $location = "http://localhost:1981/soap";
-    my $method = "add_numbers";
+    my $method = "sum";
 
     my $types = '';
     my $messages = 
@@ -106,15 +122,18 @@ $rpc->methods(defs => 1, sub {
     $types .= qq{<xsd:element name="${method}_input">\n};
     foreach my $parmname (sort keys %{$ans{methods}{$method}{in}}) {
         my $type = $ans{methods}{$method}{in}{$parmname}; 
-       
 
-        # FIXME: Make hash map for looking up wsdl types to map to.
-        # This parameter map directly to a soap base type
-        $types .= "$complex_start";
         if(ref $type eq '') {
+            $type = ($types{$type} or die "Unknown type: $type");
+            $types .= "$complex_start";
             $types .= qq{$element_start name="$parmname" type="xsd:$type"$end};
+            $types .= "$complex_end";
+        
+        } elsif(ref $type eq 'ARRAY') {
+
+        } elsif(ref $type eq 'HASH') {
+
         }
-        $types .= "$complex_end";
     }
     $types .= qq{</xsd:element>\n};
     
@@ -124,11 +143,12 @@ $rpc->methods(defs => 1, sub {
         
         # FIXME: Make hash map for looking up wsdl types to map to.
         # This parameter map directly to a soap base type
-        $types .= "$complex_start";
         if(ref $type eq '') {
+            $type = ($types{$type} or die "Unknown type: $type");
+            $types .= "$complex_start";
             $types .= qq{$element_start name="$parmname" type="xsd:$type"$end};
+            $types .= "$complex_end";
         }
-        $types .= "$complex_end";
     }
     $types .= qq{</xsd:element>\n};
     $types .= $types_footer;
