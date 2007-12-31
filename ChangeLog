@@ -1,3 +1,7 @@
+Version 1.06 ()
+ * Fixed bug in url_connect() with perl.*:// protocol: stdout and stderr was
+   not returned when perl.*2 was given.
+
 Version 1.05 (Sun Dec 30 2007)
  * Add Build.PL requirement for Privileges::Drop module
 

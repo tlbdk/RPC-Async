@@ -132,7 +132,7 @@ sub url_connect {
         }
         
         my ($readerOUT, $readerERR, $writerOUT, $writerERR);
-        if($type =~ /open2/) {
+        if($type =~ /perl(?:root)?2/) {
             pipe $readerOUT, $writerOUT or die;
             pipe $readerERR, $writerERR or die;
         }
@@ -141,7 +141,7 @@ sub url_connect {
         if ($client_pid == 0) {
             # child process
             close $parent;
-            if($type =~ /open2/) {
+            if($type =~ /perl(?:root)?2/) {
                 close $readerOUT or die;
                 close $readerERR or die;
                 open STDOUT, ">&", $writerOUT or die;
@@ -167,7 +167,8 @@ sub url_connect {
             die "executing perl: $!\n";
         }
         close $child;
-        if($type =~ /open2/) {
+
+        if($type =~ /perl(?:root)?2/) {
             close $writerOUT;
             close $writerERR;
         }
