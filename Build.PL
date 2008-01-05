@@ -9,14 +9,15 @@ my $builder = Module::Build->new(
                         .',Troels Liebe Bentsen <troels@infopro.dk>',
     dist_version_from  => 'lib/RPC/Async.pm',
     create_readme      => 1,
-    create_makefile_pl => 'traditional',
+    create_makefile_pl => 'passthrough',
+    requires => { 
+        'perl'             => '>= 5.8.0',
+        'IO::EventMux'     => '1.0',
+        'Privileges::Drop' => 0,
+        'File::Basename'   => 0,
+    },
     build_requires => {
         'Test::More' => 0,
-    },
-    requires => { 
-        'IO::EventMux' => '1.0',
-        'Privileges::Drop' => 0,
-        'File::Basename' => 0,
     },
     add_to_cleanup => [ 
         'RPC-Async-*',
