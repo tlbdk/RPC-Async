@@ -1,4 +1,5 @@
 MANIFEST			This list of files
+MANIFEST.SKIP
 Build.PL
 ChangeLog
 examples/client.pl

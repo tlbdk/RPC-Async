@@ -21,6 +21,7 @@ my $builder = Module::Build->new(
     },
     add_to_cleanup => [ 
         'RPC-Async-*',
+        'Makefile',
         'blib',
     ],
 );
