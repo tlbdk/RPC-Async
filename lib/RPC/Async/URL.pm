@@ -120,7 +120,7 @@ sub url_connect {
             do $module or die "Cannot load $module or $module did not return 1: $@\n";
             );
         } else {
-            $header = shift @args;
+            $header = shift @callargs;
         }
 
         -e "$path" or die "File $path does not exist\n";
