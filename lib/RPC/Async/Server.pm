@@ -1,6 +1,7 @@
 package RPC::Async::Server;
 use strict;
 use warnings;
+use Carp;
 
 our $VERSION = '1.05';
 
@@ -219,6 +220,9 @@ Must be called exactly once for each callback to one of the C<rpc_*> methods.
 
 sub return {
     my ($self, $caller, @args) = @_;
+
+    croak "caller is not an array ref" if ref $caller ne 'ARRAY';
+
     my ($sock, $id, $procedure) = @$caller;
 
     if (!$self->{check_response}
