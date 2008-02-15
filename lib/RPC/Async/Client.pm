@@ -69,6 +69,7 @@ sub new {
         buf => undef,
         coderefs => {},
     );
+    # FIXME: Rethrow this exception
     my ($fh, @urlargs) = url_connect($url, @args); 
     $mux->add($fh);
     $self{fh} = $fh;
