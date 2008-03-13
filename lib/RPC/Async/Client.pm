@@ -80,14 +80,14 @@ sub new {
 
 sub AUTOLOAD {
     my $self = shift;
-    if (@_ < 1) { return; }
-
     our $AUTOLOAD;
     my $procedure = $AUTOLOAD;
     $procedure =~ s/.*:://;
-
     return $self->call($procedure, @_);
 }
+
+# Define empty DESTROY() so it is not cought in the AUTOLOAD
+sub DESTROY { }
 
 =item call($procedure, @args, $subref)
 
@@ -112,11 +112,18 @@ with other subs.
 sub call {
     my ($self, $procedure, @args) = @_;
     my $callback = pop @args;
+   
+    # FIXME: Check for DESTROY call on exit
+    croak "Called RPC function $procedure without callback" if !$callback;
 
     @args = $self->_encode_args(@args);
 
     my $id = $self->_unique_id;
-    $self->{requests}{$id} = $callback;
+    $self->{requests}{$id} = { 
+        callback => $callback, 
+        procedure => $procedure,
+        args => \@args 
+    };
 
     #print "RPC::Async::Client sending: $id $procedure @args\n";
     $self->{mux}->send($self->{fh}, make_packet([ $id, $procedure, @args ]));
@@ -194,14 +201,13 @@ sub io {
 
 =item dump_requests
 
-Returns a string documenting what requests are pending. For debugging only.
+Returns requests that are pending as HASH ref. For debugging only.
 
 =cut
 
 sub dump_requests {
     my ($self) = @_;
-    use Data::Dumper;
-    return Dumper($self->{requests});
+    return $self->{requests};
 }
 
 =item wait($timeout, [@ids])
@@ -262,8 +268,9 @@ sub _handle_read {
     while (my $thawed = read_packet(\$self->{buf})) {
         if (ref $thawed eq "ARRAY" and @$thawed >= 1) {
             my ($id, @args) = @$thawed;
-            my $callback = delete $self->{requests}{$id};
-            
+            my $request = delete $self->{requests}{$id};
+            my $callback = $request->{callback};
+
             push(@ids, $id);
 
             if (defined $callback) {

@@ -81,5 +81,9 @@ sub rpc_complicated {
     $rpc->return($caller, %args);
 }
 
+sub rpc_hang {
+    my($caller, %args) = @_;
+}
+
 
 1;
