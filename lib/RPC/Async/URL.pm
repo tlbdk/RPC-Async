@@ -240,7 +240,7 @@ sub url_absolute {
     }
 }
 
-=head2 B<url_disconnect($cwd, @urls)>
+=head2 B<url_disconnect($fh, $pid)>
 
 Wait for url to disconnect
 
