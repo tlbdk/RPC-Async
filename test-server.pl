@@ -85,5 +85,8 @@ sub rpc_hang {
     my($caller, %args) = @_;
 }
 
+sub rpc_die {
+    die "I DIE";
+}
 
 1;
