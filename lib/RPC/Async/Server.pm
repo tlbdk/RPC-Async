@@ -99,19 +99,18 @@ sub new {
 sub _decode_args {
     my ($self, $fh, @args) = @_;
 
-    # FIXME: Remove ugly recursive call
-    foreach my $arg (@args) {
+    while(my $arg = shift @args) {
         if (not ref $arg) {
             # do nothing
         
         } elsif (ref $arg eq "ARRAY") {
-            $self->_decode_args($fh, @$arg);
+            push(@args, @{$arg});
 
         } elsif (ref $arg eq "HASH") {
-            $self->_decode_args($fh, values %$arg);
+            push(@args, values %{$arg});
 
         } elsif (ref $arg eq "REF") {
-            $self->_decode_args($fh, $$arg);
+            push(@args, ${$arg});
 
         } elsif (ref $arg eq "CODE") {
             die __PACKAGE__.": coderef?";
