@@ -220,18 +220,11 @@ Must be called exactly once for each callback to one of the C<rpc_*> methods.
 
 sub return {
     my ($self, $caller, @args) = @_;
-
+    
     croak "caller is not an array ref" if ref $caller ne 'ARRAY';
 
     my ($sock, $id, $procedure) = @$caller;
-
-    if (!$self->{check_response}
-            or $self->{check_response}->($procedure, @args)) {
-        #print "return: sending: $id @args\n";
-        $self->{mux}->send($sock, make_packet([ $id, @args ]));
-    } else {
-        die "return: check_response failed\n";
-    }
+    $self->{mux}->send($sock, make_packet([ $id, @args ]));
 }
 
 =head2 C<io($event)>
