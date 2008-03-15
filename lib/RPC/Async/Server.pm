@@ -258,7 +258,7 @@ sub io {
     my $clients = $self->{clients}; 
 
     if ($fh and exists $clients->{$fh} or
-        $clients->{$event->{parent_fh}} and $event->{type} eq "accepted") {
+        ($event->{type} eq "accepted" and $clients->{$event->{parent_fh}})) {
         my $type = $event->{type};
 
         if ($type eq "read") {
