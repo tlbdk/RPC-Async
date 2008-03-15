@@ -63,8 +63,10 @@ client sends invalid data, throw an exception to disconnect him.
 =cut
 
 use IO::EventMux;
-use RPC::Async::Util qw(make_packet append_data read_packet expand);
+use RPC::Async::Util qw(make_packet expand);
 use RPC::Async::Coderef;
+use IO::Buffered;
+use Storable qw(nfreeze thaw);
 
 =head2 C<new($mux [, $package])>
 
@@ -88,7 +90,6 @@ sub new {
     my %self = (
         mux => $mux,
         package => $package,
-        buf => undef,
         clients => {},
     );
 
@@ -98,6 +99,7 @@ sub new {
 sub _decode_args {
     my ($self, $fh, @args) = @_;
 
+    # FIXME: Remove ugly recursive call
     foreach my $arg (@args) {
         if (not ref $arg) {
             # do nothing
@@ -129,16 +131,24 @@ sub _decode_args {
 
 sub _handle_read {
     my ($self, $fh, $data) = @_;
-
-    append_data \$self->{buf}, $data;
-
-    while (my $thawed = read_packet(\$self->{buf})) {
-        if (ref $thawed eq "ARRAY" and @$thawed >= 2) {
+    
+    my $buffer = $self->{clients}{$fh};
+    $buffer->write($data);
+    foreach my $data ($buffer->read()) {
+        my $thawed = eval { thaw $data }; 
+        
+        if($@) {
+            warn __PACKAGE__.": Bad data in packet: $@\n";
+            warn __PACKAGE__.": Disconnecting client for error: $@\n";
+            $self->{mux}->kill($fh);
+            last;
+        
+        } elsif (ref $thawed eq "ARRAY" and @$thawed >= 2) {
             my ($id, $method, @args) = @$thawed;
-            
+        
             my $caller = [ $fh, $id, $method ];
             $self->_decode_args($fh, @args);
-            
+        
             # Set main ref and package ref to package if not main.
             my $main = \%main::;
             my $package = $self->{package} eq 'main'
@@ -146,12 +156,12 @@ sub _handle_read {
 
             # Check if the method exists and call it 
             if(exists $package->{"rpc_$method"}) {
-                # Get code refrence back
+                # Get code reference back
                 my $sub = *{$package->{"rpc_$method"}}{CODE};
                 if($sub) {
                     $sub->($caller, @args);
                 }
-            
+        
             } elsif($method eq 'methods') {
                 my %methods = map { /^rpc_(.+)/; $1 => {} }
                     grep {$_ =~ /^rpc_/} keys %{$package};
@@ -165,7 +175,7 @@ sub _handle_read {
                                     = expand($sub->($caller, 1), 1);
                                 $methods{$method}{out}
                                     = expand($sub->($caller, 0));
-                                
+                            
                             } else {
                                 print "Could not find sub def_$1\n";
                             }
@@ -173,15 +183,12 @@ sub _handle_read {
                     }
                 }
                 $self->return($caller, methods => \%methods);
-                
+            
             } else {
                 $self->return($caller, errors => [
                     "No sub '$method' in package '$self->{package}'"
                 ]);
             }
-
-        } else {
-            die "bad data in thawed packet\n";
         }
     }
 }
@@ -196,7 +203,7 @@ directly.
 sub add_client {
     my ($self, $sock) = @_;
     $self->{mux}->add($sock);
-    $self->{clients}{$sock} = 1;
+    $self->{clients}{$sock} = new IO::Buffered(Size => ["N", -4]);
 }
 
 =head2 C<add_listener($socket)>
@@ -249,19 +256,15 @@ This method will invoke the C<rpc_*> callbacks as needed.
 sub io {
     my ($self, $event) = @_;
     my $fh = $event->{fh};
+    my $clients = $self->{clients}; 
 
-    if ($fh && exists $self->{clients}{$fh} or
-        $event->{type} eq "accepted" && $self->{clients}{$event->{parent_fh}}) {
+    if ($fh and exists $clients->{$fh} or
+        $clients->{$event->{parent_fh}} and $event->{type} eq "accepted") {
         my $type = $event->{type};
 
         if ($type eq "read") {
             #print __PACKAGE__, ": got ", length $event->{data}, " bytes\n";
-
-            eval { $self->_handle_read($fh, $event->{data}) };
-            if ($@) {
-                warn __PACKAGE__.": Disconnecting client for error: $@\n";
-                $self->{mux}->kill($fh);
-            }
+            $self->_handle_read($fh, $event->{data});
 
         } elsif ($type eq "closed") {
             delete $self->{clients}{$fh};

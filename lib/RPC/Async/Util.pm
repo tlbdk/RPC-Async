@@ -14,7 +14,7 @@ use base "Exporter";
 use Class::ISA;
 use Storable qw(nfreeze thaw);
 
-our @EXPORT_OK = qw(append_data read_packet make_packet expand);
+our @EXPORT_OK = qw(make_packet expand);
 
 =head1 METHODS
 
@@ -59,47 +59,6 @@ sub expand {
     );
 
     return $ref;
-}
-
-=item append_data($buf, $data)
-
-Function for buffering data.
-
-=cut
-
-sub append_data {
-    my ($buf, $data) = @_;
-
-    if (not defined $$buf) {
-        $$buf = $data;
-    } else {
-        $$buf .= $data;
-    }
-}
-
-=item read_packet($buf)
-
-Reads the next packet and thaws it if enough data has been received.
-
-=cut
-
-sub read_packet {
-    my ($buf) = @_;
-
-    return if not defined $$buf or length $$buf < 4;
-
-    my $length = unpack("N", $$buf);
-    die if $length < 4; # TODO: catch this
-    return if length $$buf < $length;
-
-    my $frozen = substr $$buf, 4, $length - 4;
-    if (length $$buf == $length) {
-        $$buf = undef;
-    } else {
-        $$buf = substr $$buf, $length;
-    }
-
-    return thaw $frozen;
 }
 
 =item make_packet($ref)

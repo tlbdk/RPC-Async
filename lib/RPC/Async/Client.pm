@@ -4,6 +4,9 @@ use warnings;
 
 our $VERSION = '1.05';
 
+use IO::Buffered;
+use Storable qw(nfreeze thaw);
+
 =head1 NAME
 
 RPC::Async::Client - client side of asynchronous RPC framework
@@ -47,7 +50,7 @@ further documented.
 
 use Carp;
 use Socket;
-use RPC::Async::Util qw(make_packet append_data read_packet);
+use RPC::Async::Util qw(make_packet);
 use RPC::Async::Coderef;
 use RPC::Async::URL;
 
@@ -66,8 +69,8 @@ sub new {
         mux => $mux,
         requests => {},
         serial => -1,
-        buf => undef,
         coderefs => {},
+        buffer => new IO::Buffered(Size => ["N", -4]),
     );
     # FIXME: Rethrow this exception
     my ($fh, @urlargs) = url_connect($url, @args); 
@@ -186,7 +189,7 @@ sub io {
         my $type = $event->{type};
         if ($type eq "read") {
             #print "RPC::Async::Client got ", length $event->{data}, " bytes\n";
-            $self->_handle_read($event->{data});
+            $self->_handle_read($event->{fh}, $event->{data});
 
         } elsif ($type eq "closed") {
             die __PACKAGE__ .": server disconnected\n";
@@ -237,7 +240,8 @@ sub wait {
     while($count and my $event = $mux->mux()) {
         if ($event->{fh} and $event->{fh} == $self->{fh}) {
             if ($event->{type} eq "read") {
-                foreach my $id ($self->_handle_read($event->{data})) {
+                my @ids = $self->_handle_read($event->{fh}, $event->{data});
+                foreach my $id (@ids) {
                     if(exists $match{$id} or @ids == 0) {
                         $count--;
                     }
@@ -260,13 +264,21 @@ sub wait {
 }
 
 sub _handle_read {
-    my ($self, $data) = @_;
+    my ($self, $fh, $data) = @_;
     my @ids;
 
-    # TODO: Use buffering code in IO::Buffered and remove functions from Util.pm
-    append_data(\$self->{buf}, $data);
-    while (my $thawed = read_packet(\$self->{buf})) {
-        if (ref $thawed eq "ARRAY" and @$thawed >= 1) {
+    my $buffer = $self->{buffer};
+    $buffer->write($data);
+    foreach my $data ($buffer->read()) {
+        my $thawed = eval { thaw $data }; 
+        
+        if($@) {
+            warn __PACKAGE__.": Bad data in packet: $@\n";
+            warn __PACKAGE__.": Disconnecting from server: $@\n";
+            $self->{mux}->kill($fh);
+            last;
+        
+        } elsif (ref $thawed eq "ARRAY" and @$thawed >= 1) {
             my ($id, @args) = @$thawed;
             my $request = delete $self->{requests}{$id};
             
@@ -289,8 +301,6 @@ sub _handle_read {
             } else {
                 warn __PACKAGE__.": Spurious reply to id $id\n";
             }
-        } else {
-            warn __PACKAGE__.": Bad data in thawed packet";
         }
     }
     
