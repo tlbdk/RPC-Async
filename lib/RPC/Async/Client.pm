@@ -120,7 +120,6 @@ sub call {
     my ($self, $procedure, @args) = @_;
     my $callback = pop @args;
    
-    # FIXME: Check for DESTROY call on exit
     croak "Called RPC function $procedure without callback" if !$callback;
 
     @args = $self->_encode_args(@args);
