@@ -263,18 +263,17 @@ sub _handle_read {
     my ($self, $data) = @_;
     my @ids;
 
-    # TODO: Use buffering code in EventMux and remove functions from Util.pm
+    # TODO: Use buffering code in IO::Buffered and remove functions from Util.pm
     append_data(\$self->{buf}, $data);
     while (my $thawed = read_packet(\$self->{buf})) {
         if (ref $thawed eq "ARRAY" and @$thawed >= 1) {
             my ($id, @args) = @$thawed;
             my $request = delete $self->{requests}{$id};
-            my $callback = $request->{callback};
-
-            push(@ids, $id);
-
-            if (defined $callback) {
+            
+            if (defined $request) {
+                push(@ids, $id);
                 #print __PACKAGE__, ": callback(@args)\n";
+                my $callback = $request->{callback};
                 $callback->(@args);
 
             } elsif (exists $self->{coderefs}{$id}) {
