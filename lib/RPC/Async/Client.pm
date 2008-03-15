@@ -78,7 +78,11 @@ sub new {
     $self{fh} = $fh;
     $self{urlargs} = \@urlargs;
 
-    return bless \%self, (ref $class || $class);
+    if(wantarray) {
+        return(bless(\%self, (ref $class || $class)), @urlargs);
+    } else {
+        return bless(\%self, (ref $class || $class));
+    }
 }
 
 sub AUTOLOAD {
