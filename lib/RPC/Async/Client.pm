@@ -236,11 +236,10 @@ sub wait {
     my %match = map { $_ => 1 } @ids;
     my $count = (int @ids or 1);
     my $mux = $self->{mux};
-     
-    # Set timeout only on our own fh.
-    $mux->timeout($self->{fh}, $timeout);
+    my $start = time;
+
     my @events;
-    while($count and my $event = $mux->mux()) {
+    while($count and my $event = $mux->mux($timeout)) {
         if ($event->{fh} and $event->{fh} == $self->{fh}) {
             if ($event->{type} eq "read") {
                 my @ids = $self->_handle_read($event->{fh}, $event->{data});
@@ -259,6 +258,12 @@ sub wait {
 
         } else {
             push @events, $event;
+        }
+
+        # Check that we still have timeout left
+        $timeout = $timeout - (time - $start);
+        if($timeout <= 0) {
+            last;
         }
     }
 

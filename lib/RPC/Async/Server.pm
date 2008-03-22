@@ -2,6 +2,7 @@ package RPC::Async::Server;
 use strict;
 use warnings;
 use Carp;
+use Scalar::Util qw(weaken);
 
 our $VERSION = '1.05';
 
@@ -117,6 +118,11 @@ sub _decode_args {
 
         } elsif (UNIVERSAL::isa($arg, "RPC::Async::Coderef")) {
             my $id = $arg->id;
+          
+            # Save a copy to call kill() if the client disconnects
+            weaken($arg); # Don't inc ref count
+            push(@{$self->{clients}{$fh}{coderefs}}, \$arg);
+            
             $arg->set_call(sub {
                 $self->{mux}->send($fh, make_packet([ $id, "call", @_ ]));
             });
@@ -131,7 +137,7 @@ sub _decode_args {
 sub _handle_read {
     my ($self, $fh, $data) = @_;
     
-    my $buffer = $self->{clients}{$fh};
+    my $buffer = $self->{clients}{$fh}{buffer};
     $buffer->write($data);
     foreach my $data ($buffer->read()) {
         my $thawed = eval { thaw $data }; 
@@ -202,7 +208,7 @@ directly.
 sub add_client {
     my ($self, $sock) = @_;
     $self->{mux}->add($sock);
-    $self->{clients}{$sock} = new IO::Buffered(Size => ["N", -4]);
+    $self->{clients}{$sock}{buffer} = new IO::Buffered(Size => ["N", -4]);
 }
 
 =head2 C<add_listener($socket)>
@@ -215,7 +221,7 @@ to the internal list of clients. This method is not usually called directly.
 sub add_listener {
     my ($self, $sock) = @_;
     $self->{mux}->add($sock, Listen => 1);
-    $self->{clients}{$sock} = 1;
+    $self->{clients}{$sock}{buffer} = undef;
 }
 
 =head2 C<return($caller, @args)>
@@ -266,9 +272,15 @@ sub io {
             $self->_handle_read($fh, $event->{data});
 
         } elsif ($type eq "closed") {
+            #use Data::Dumper;
+            #print Dumper($self->{clients}{$fh}{coderefs});
+            foreach my $coderef (@{$self->{clients}{$fh}{coderefs}}) {
+                # This is a ref to the Coderef object
+                $$coderef->kill() if defined $$coderef;
+            }
             delete $self->{clients}{$fh};
-            #print "Client $fh disconnected; ", int(keys %{$self->{clients}}),
-            #        " clients left.\n"
+            #print("Client $fh disconnected; ",
+            #    int(keys %{$self->{clients}}), " clients left.\n");
 
         } elsif ($type eq "accepted") {
             $self->add_client($fh);
