@@ -112,7 +112,6 @@ sub call {
 
 sub DESTROY {
     my ($self) = @_;
-    print "destroy\n";
     if ($self->{destroy}) {
         $self->{destroy}->();
         $self->{destroy} = undef;
