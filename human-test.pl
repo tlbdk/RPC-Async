@@ -12,7 +12,7 @@ if (@ARGV < 1) {
 my ($server, @server_args) = @ARGV;
 
 my $mux = IO::EventMux->new();
-$mux->add(\*STDIN, Buffered => ['Split', qr/\n/]);
+$mux->add(\*STDIN, Buffered => new IO::Buffered(Split => qr/\n/));
 
 my $rpc = RPC::Async::Client->new($mux, $server, @server_args) or die;
 
