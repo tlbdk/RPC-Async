@@ -25,7 +25,7 @@ while (1) {
     eval { $rpc->io($event); };
 
     if($event->{type} eq 'read' and $event->{fh} eq $err) {
-        cmp_ok($event->{data}, "=~", "I DIE at test-server.pl",  
+        cmp_ok($event->{data}, "=~", "I DIE at .*test-server.pl",  
             "The server dies with an error as it should");
         last;
     }
