@@ -2,6 +2,10 @@
 use strict;
 use warnings;
 
+use IO::Handle;
+STDOUT->autoflush(1);
+STDERR->autoflush(1);
+
 use RPC::Async::Server;
 use IO::EventMux;
 
@@ -9,10 +13,22 @@ use English;
 
 my $mux = IO::EventMux->new;
 my $rpc = RPC::Async::Server->new($mux);
+
+$rpc->set_limits(Outstanding => 100);
+
 init_clients($rpc);
 
+my @sleepers;
+my $later = 1;
+
 while ($rpc->has_clients()) {
-    $rpc->io($mux->mux);
+    if($rpc->has_queued()) {
+        $later = 0;
+        while(my $caller = shift @sleepers) {
+            $rpc->return($caller, queued => 0);
+        }
+    }
+    $rpc->io($mux->mux()) or next;
 }
 
 #print "RPC server: all clients gone\n";
@@ -87,6 +103,15 @@ sub rpc_hang {
 
 sub rpc_die {
     die "I DIE";
+}
+
+sub rpc_sleep {
+    my($caller, %args) = @_;
+    if($later) {
+        push(@sleepers, $caller);
+    } else {
+        $rpc->return($caller, queued => 1);
+    }
 }
 
 1;

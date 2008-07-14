@@ -92,6 +92,11 @@ sub new {
         mux => $mux,
         package => $package,
         clients => {},
+
+        # Limits
+        outstanding => 0,
+        max_outstanding => 0,
+        queue => [],
     );
 
     return bless \%self, (ref $class || $class);
@@ -164,7 +169,16 @@ sub _handle_read {
                 # Get code reference back
                 my $sub = *{$package->{"rpc_$method"}}{CODE};
                 if($sub) {
-                    $sub->($caller, @args);
+                    if(!$self->{max_outstanding}) {
+                        $sub->($caller, @args);
+                           
+                    } elsif ($self->{outstanding} < $self->{max_outstanding}) {
+                        $self->{outstanding}++;
+                        $sub->($caller, @args);
+
+                    } else {
+                        push(@{$self->{queue}}, [$sub, $caller, @args]);
+                    }
                 }
         
             } elsif($method eq 'methods') {
@@ -237,6 +251,10 @@ sub return {
 
     my ($sock, $id, $procedure) = @$caller;
     $self->{mux}->send($sock, make_packet([ $id, @args ]));
+    
+    if($self->{outstanding} > 0) {
+        $self->{outstanding}--;
+    }
 }
 
 =head2 C<io($event)>
@@ -304,6 +322,43 @@ server.
 sub has_clients {
     my ($self) = @_;
     return scalar %{$self->{clients}};
+}
+
+=head2 C<has_queued()>
+
+Returns true if and only if at least one request is still in the queue
+server. Also runs queued items if outstanding request has dropped.
+
+=cut
+
+sub has_queued {
+    my ($self) = @_;
+    
+    while($self->{outstanding} < $self->{max_outstanding}) {    
+        my $call = shift @{$self->{queue}} or last;
+        my ($sub, $caller, @args) = @{$call};
+        $self->{outstanding}++; 
+        $sub->($caller, @args);
+    }
+    
+    return scalar @{$self->{queue}};
+}
+
+=head2 C<set_limits()>
+
+FIXME:
+
+=cut
+
+sub set_limits {
+    my ($self, %opts) = @_;
+   
+    # FIXME: Do croak stuff here
+    # FIXME: Handle resetting MaxOutstanding, remember to empty queue
+    if(defined $opts{Outstanding}) {
+        $self->{max_outstanding} = $opts{Outstanding}; 
+        $self->{outstanding} = 0;
+    }
 }
 
 1;
