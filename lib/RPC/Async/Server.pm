@@ -221,6 +221,10 @@ directly.
 
 sub add_client {
     my ($self, $sock) = @_;
+    #my ($package, $filename, $line, $subroutine, $hasargs,
+    #    $wantarray, $evaltext, $is_require, $hints, $bitmask) = caller(1);
+    #print "add_client: $filename, $line, $subroutine :: $sock\n";
+
     $self->{mux}->add($sock);
     $self->{clients}{$sock}{buffer} = new IO::Buffered(Size => ["N", -4]);
 }
