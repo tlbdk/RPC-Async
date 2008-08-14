@@ -239,7 +239,7 @@ to the internal list of clients. This method is not usually called directly.
 sub add_listener {
     my ($self, $sock) = @_;
     $self->{mux}->add($sock, Listen => 1);
-    $self->{clients}{$sock}{buffer} = undef;
+    $self->{listeners}{$sock}{buffer} = undef;
 }
 
 =head2 C<return($caller, @args)>
@@ -284,9 +284,10 @@ sub io {
     my ($self, $event) = @_;
     my $fh = $event->{fh};
     my $clients = $self->{clients}; 
+    my $listeners = $self->{listeners}; 
 
     if ($fh and exists $clients->{$fh} or
-        ($event->{type} eq "accepted" and $clients->{$event->{parent_fh}})) {
+        ($event->{type} eq "accepted" and $listeners->{$event->{parent_fh}})) {
         my $type = $event->{type};
 
         if ($type eq "read") {

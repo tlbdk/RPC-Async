@@ -233,6 +233,11 @@ wait call has finished.
 
 sub wait {
     my ($self, $timeout, @ids) = @_;
+    
+    # Check if $timeout is a number
+    croak "Timeout should be a number" if !(defined $timeout 
+        and $timeout =~ /^-?\d+$/);
+    
     my %match = map { $_ => 1 } @ids;
     my $count = (int @ids or 1);
     my $mux = $self->{mux};

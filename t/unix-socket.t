@@ -55,12 +55,15 @@ do $module or die "Cannot load $module: $@\n";
 my ($fh, $pid) = url_connect("perlheader://./test-server.pl", $cfd_rpc);
 my $rpc1 = RPC::Async::Client->new($mux, $fh);
 
-my $rpc2 = RPC::Async::Client->new($mux, url_connect("unix://./socks/test-server.sock"));
-
-$rpc1->add_numbers(n1 => 1, n2 => 2, sub {
+my $id = $rpc1->add_numbers(n1 => 1, n2 => 2, sub {
     my %reply = @_;
     is(1 + 2, $reply{sum}, "Addition of 1 and 2");
 });
+
+# Wait to make sure the server is up so we can connect to the socket
+$rpc1->wait(1, $id);
+
+my $rpc2 = RPC::Async::Client->new($mux, url_connect("unix://./socks/test-server.sock"));
 
 $rpc2->add_numbers(n1 => 1, n2 => 2, sub {
     my %reply = @_;
