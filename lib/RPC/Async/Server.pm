@@ -220,13 +220,13 @@ directly.
 =cut
 
 sub add_client {
-    my ($self, $sock) = @_;
+    my ($self, $fh) = @_;
     #my ($package, $filename, $line, $subroutine, $hasargs,
     #    $wantarray, $evaltext, $is_require, $hints, $bitmask) = caller(1);
-    #print "add_client: $filename, $line, $subroutine :: $sock\n";
+    #print "add_client: $filename, $line, $subroutine :: $fh\n";
 
-    $self->{mux}->add($sock);
-    $self->{clients}{$sock}{buffer} = new IO::Buffered(Size => ["N", -4]);
+    $self->{mux}->add($fh);
+    $self->{clients}{$fh}{buffer} = new IO::Buffered(Size => ["N", -4]);
 }
 
 =head2 C<add_listener($socket)>
@@ -305,7 +305,9 @@ sub io {
             #    int(keys %{$self->{clients}}), " clients left.\n");
 
         } elsif ($type eq "accepted") {
-            $self->add_client($fh);
+            $self->{clients}{$fh}{buffer} 
+                = new IO::Buffered(Size => ["N", -4]);
+            #$self->add_client($fh);
         }
 
         return;
