@@ -16,7 +16,7 @@ my $rpc = RPC::Async::Client->new($mux, "perl://./test-server.pl") or die;
 
 $rpc->no_such_method(0, sub {
     my (%ans) = @_;
-    ok(defined $ans{errors}, "Invalid method call gives error");
+    ok(defined $ans{error}, "Invalid method call gives error");
 });
 
 sub test_add {

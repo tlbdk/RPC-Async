@@ -204,9 +204,9 @@ sub _handle_read {
                 $self->return($caller, methods => \%methods);
             
             } else {
-                $self->return($caller, errors => [
-                    "No sub '$method' in package '$self->{package}'"
-                ]);
+                $self->return($caller, 
+                    error => "No sub '$method' in package '$self->{package}'"
+                );
             }
         }
     }
