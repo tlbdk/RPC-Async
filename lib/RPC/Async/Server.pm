@@ -254,8 +254,12 @@ sub return {
     croak "caller is not an array ref" if ref $caller ne 'ARRAY';
 
     my ($sock, $id, $procedure) = @$caller;
-    $self->{mux}->send($sock, make_packet([ $id, @args ]));
-    
+    eval { $self->{mux}->send($sock, make_packet([ $id, @args ])); };
+    if($@) {
+        $@ =~ s/ at \S+ line \d+.*$//s;
+        croak "return gave error: $@";
+    }
+
     if($self->{outstanding} > 0) {
         $self->{outstanding}--;
     }
