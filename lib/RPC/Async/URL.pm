@@ -323,7 +323,7 @@ Jonas Jensen <jonas@infopro.dk>, Troels Liebe Bentsen <troels@infopro.dk>
 
 =head1 COPYRIGHT
 
-Copyright(C) 2005-2007 Troels Liebe Bentsen
+Copyright(C) 2005-2008 Troels Liebe Bentsen
 
 Copyright(C) 2005-2007 Jonas Jensen
 
