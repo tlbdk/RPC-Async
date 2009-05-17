@@ -2,7 +2,7 @@ package RPC::Async::URL;
 use strict;
 use warnings;
 
-our $VERSION = '1.05';
+our $VERSION = '2.00';
 
 =head1 NAME
 
@@ -109,9 +109,8 @@ sub url_connect {
             
             open my $sock, "+<&=", $fd or die "Cannot open fd $fd\n";
             
-            sub init_clients {
+            sub url_clients {
                 my ($rpc) = @_;
-                $rpc->add_client($sock);
                 return $sock;
             }
             

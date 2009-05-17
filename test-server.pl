@@ -2,6 +2,8 @@
 use strict;
 use warnings;
 
+use lib "lib";
+
 use IO::Handle;
 STDOUT->autoflush(1);
 STDERR->autoflush(1);
@@ -11,107 +13,81 @@ use IO::EventMux;
 
 use English;
 
+my $DEBUG = 1;
+my $TRACE = 1;
+my $INFO = 1;
+
 my $mux = IO::EventMux->new;
-my $rpc = RPC::Async::Server->new($mux);
+my $rpc = RPC::Async::Server->new( Mux => $mux );
 
-$rpc->set_limits(Outstanding => 100);
+unlink "server.tmp";
 
-init_clients($rpc);
+# TODO: Make check all rpc_* that they do not colide with client functions
 
-my @sleepers;
-my $later = 1;
-
-while ($rpc->has_clients()) {
-    if($rpc->has_queued()) {
-        $later = 0;
-        while(my $caller = shift @sleepers) {
-            $rpc->return($caller, queued => 0);
-        }
-    }
-    $rpc->io($mux->mux()) or next;
+# Add the filehandle(pipe) that url_connect call created
+foreach my $fh (url_clients($rpc)) {
+    print "add url_client: $fh\n" if $INFO;
+    $mux->add($fh);
+    $rpc->add($fh);
 }
 
-#print "RPC server: all clients gone\n";
+while (my $event = $mux->mux()) {
+    next if $rpc->io($event);
+    print "srv type($event->{fh}): $event->{type}\n" if $DEBUG;
+}
+
+my $sleep;
+print "sleeping\n" if $sleep;
+sleep $sleep if $sleep;
+
+print "All clients quit, so shutting down\n" if $INFO;
+
+
+# Make it difficult to kill the server and keep stdout and stderr open with
+# sleep after shutdown
+sub rpc_hardkill {
+    $SIG{HUP}  = 'IGNORE';
+    $SIG{INT}  = 'IGNORE';
+    $SIG{QUIT} = 'IGNORE';
+    $SIG{TERM} = 'IGNORE';
+    $sleep = 30;
+    $rpc->return($_[0]);
+}
+
+sub rpc_simple {
+    $rpc->return($_[0], 1);
+}
 
 # Named parameter with positional information because of name
 sub def_add_numbers { $_[1] ? { n1 => 'int', n2 => 'int' } : { sum => 'int' }; }
 sub rpc_add_numbers {
     my ($caller, %args) = @_;
     my $sum = $args{n1} + $args{n2};
+    print "call to add_numbers\n";
     $rpc->return($caller, sum => $sum);
-}
-
-# Named parameter with positional information because of name
-sub def_sum { $_[1] ? { numbers => ['int'] } : { sum => 'int' }; }
-sub rpc_sum {
-    my ($caller, %args) = @_;
-    my $sum += $_ foreach @{$args{numbers}};
-    $rpc->return($caller, sum => $sum);
-}
-
-# Named parameter with positional information, as order is used.
-# Also optional parameter for type int, pos given as sub type that will be returned to the user
-sub def_get_id { $_[1] ? { } : { 'uid|gid|euid|egid' => 'int:pos' }; }
-sub rpc_get_id {
-    my ($caller) = @_;
-    $rpc->return($caller, uid => $UID, gid => $GID, 
-	    euid => $EUID, egid => $EGID);
 }
 
 # Named parameter with positional information
 sub def_callback { $_[1] ? { calls_01 => 'int', callback_02 => 'sub' } : { }; }
 sub rpc_callback {
     my ($caller, %args) = @_;
-    my ($count, $wrap) = @args{qw(calls callback)};
-    my $callback = ${$wrap->{key}[0]};
+    my ($count, $callback) = @args{qw(calls callback)};
 
-    $rpc->return($caller);
+    $rpc->return($caller, result => 0);
 
     for (1 .. $count) {
-        $callback->call($count);
+        $callback->call(result => $count);
     }
 }
 
-sub def_complicated {{ 
-        array_of_int_01 => ['int'], 
-        array_of_string_02 => ['string'], 
-        array_of_bool_03 => ['bool'], 
-        array_of_any_04 => [''],
-        array_of_hash_any_05 => [{}],
-        array_of_hash_string_06 => [{ keyname => 'string' }],
-        complicated_07 => {
-            'results|persons' => [{
-                name => 'string',
-                age => 'long',
-                largeint => 'int64',
-            }],
-            has_error => 'bool',
-            error => {
-                errornum => 'byte',
-                errorstr => 'string',
-            }
-        }
-};}
-sub rpc_complicated {
-    my ($caller, %args) = @_;
-    $rpc->return($caller, %args);
-}
-
-sub rpc_hang {
-    my($caller, %args) = @_;
+sub rpc_no_return {
+    # DO nothing
 }
 
 sub rpc_die {
-    die "I DIE";
-}
-
-sub rpc_sleep {
-    my($caller, %args) = @_;
-    if($later) {
-        push(@sleepers, $caller);
-    } else {
-        $rpc->return($caller, queued => 1);
-    }
+    my ($caller, %args) = @_;
+    sleep(defined $args{sleep} ? $args{sleep} : 1);
+    die "Died waiting after sleep";
 }
 
 1;

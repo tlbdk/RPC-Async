@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use Carp;
 
-our $VERSION = '1.05';
+our $VERSION = '2.00';
 
 =head1 NAME
 
@@ -29,7 +29,6 @@ sub new {
         id      => $id,
         call    => undef,
         destroy => undef,
-        alive    => 1,
     );
 
     return bless \%self, (ref $class || $class);
@@ -44,31 +43,6 @@ Return id
 sub id {
     my ($self) = @_;
     $self->{id};
-}
-
-=head2 B<alive()>
-
-Returns true if the callback client is still connected and the coderef on the
-client side is valid.
-
-=cut
-
-sub alive {
-    my ($self) = @_;
-    $self->{alive};
-}
-
-=head2 B<kill()>
-
-Kill this object, used when the clients disconnects.
-
-=cut
-
-sub kill {
-    my ($self) = @_;
-    $self->{alive} = 0;
-    $self->{destroy} = undef;
-    $self->{call} = undef;
 }
 
 =head2 B<set_call($call)>
@@ -101,7 +75,6 @@ Call callback function with @args
 
 sub call {
     my ($self, @args) = @_;
-    croak "call on dead Coderef" if !$self->{alive};
 
     if ($self->{call}) {
         $self->{call}->(@args);
@@ -112,6 +85,7 @@ sub call {
 
 sub DESTROY {
     my ($self) = @_;
+    
     if ($self->{destroy}) {
         $self->{destroy}->();
         $self->{destroy} = undef;

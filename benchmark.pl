@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use Carp;
 
-# Old RPC::Rsync
+# New RPC::Async
 
 use lib "lib";
 
@@ -27,7 +27,7 @@ $SIG{PIPE} = sub { # SIGPIPE
 my $mux = IO::EventMux->new();
 
 #while(1) {
-    benchmark_stat(3, 10000, $mux, 1, Timeout => 3, Retries => 0);
+    benchmark_stat(3, 10000, $mux, 1, Timeout => 0, Retries => 0);
 #}
 
 sub benchmark_stat {
@@ -57,8 +57,18 @@ sub benchmark_stat {
 sub benchmark {
     my ($requests, $mux, $servers, %options) = @_;
     
-    print "Starting 1 server\n" if $DEBUG;
-    my $rpc = RPC::Async::Client->new($mux, "perl://./test-server.pl") or die;
+    my $rpc = RPC::Async::Client->new( 
+        %options,
+        Mux => $mux,
+        CloseOnIdle => 1,
+    );
+    
+    print "Starting $servers servers\n" if $DEBUG;
+    foreach (1 .. $servers) {
+        $rpc->connect("perl2://./test-server.pl");
+    }
+   
+    #sleep 1;
 
     my $t0 = [gettimeofday];
     my $elapsed; 
@@ -73,12 +83,12 @@ sub benchmark {
         });
     }
 
-    while ($rpc->has_requests || $rpc->has_coderefs) {
-        my $event = $mux->mux();
+    while (my $event = $mux->mux($rpc->timeout())) {
         print "$event->{type}\n" if $TRACE;
-        $rpc->io($event);
+        next if $rpc->io($event);
     }
     
+    die "We still have work" if $rpc->has_work;
     $rpc->disconnect();
     return $elapsed;
 }

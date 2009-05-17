@@ -2,14 +2,27 @@ package RPC::Async::Client;
 use strict;
 use warnings;
 
-our $VERSION = '1.05';
+our $VERSION = '2.00';
 
-use IO::Buffered;
-use Storable qw(nfreeze thaw);
+my $DEBUG = 1;
+my $TRACE = 1;
+my $INFO = 1;
+
+# TODO: Retries should be able to limited to a number of retries
+# within a period of time. Eg. You can fail 3 times in 1 hour, a quick way to
+# implement this would be a timeout that resets the retries after number of
+# minutes.
+
+# TODO: Do a better implementation of connect() call and remove dependence on URL
+# module. 
 
 =head1 NAME
 
 RPC::Async::Client - client side of asynchronous RPC framework
+
+=head1 VERSION
+
+This documentation refers to RPC::Async::Client version 2.00. 
 
 =head1 SYNOPSIS
 
@@ -17,8 +30,9 @@ RPC::Async::Client - client side of asynchronous RPC framework
   use IO::EventMux;
   
   my $mux = IO::EventMux->new;
-  my $rpc = RPC::Async::Client->new($mux, "perl://add-server.pl");
-  # or # my $rpc = RPC::Async::Client->new($mux, "tcp://127.0.0.1:1234");
+  my $rpc = RPC::Async::Client->new(Mux => $mux);
+  
+  $rpc->connect('perl://./test-server.pl');
 
   $rpc->add_numbers(n1 => 2, n2 => 3,
       sub {
@@ -26,8 +40,8 @@ RPC::Async::Client - client side of asynchronous RPC framework
           print "2 + 3 = $reply{sum}\n";
       });
   
-  while ($rpc->has_requests || $rpc->has_coderefs) {
-      my $event = $rpc->io($mux->mux) or next;
+  while (my $event = $mux->mux($rpc->timeout())) {
+      next if $rpc->io($mux->mux);
   }
 
   $rpc->disconnect;
@@ -36,7 +50,8 @@ RPC::Async::Client - client side of asynchronous RPC framework
 
 This module provides the magic that hides the details of doing asynchronous RPC
 on the client side. It does not dictate how to implement initialisation or main
-loop, although it requires the application to use L<IO::EventMux>.
+loop, although it requires the application to use L<IO::EventMux> for the
+moment. Future version might allow to use other event loops handlers.
 
 The procedures made available by the remote server can be called directly on the
 L<RPC::Async::Client> instance or via the C<call()> method where they are
@@ -44,59 +59,201 @@ further documented.
 
 =head1 METHODS
 
-=over
-
 =cut
 
 use Carp;
 use Socket;
-use RPC::Async::Util qw(make_packet);
+use RPC::Async::Util qw(encode_args);
 use RPC::Async::Coderef;
+use RPC::Async::Regexp;
 use RPC::Async::URL;
+use Data::Dumper;
 
-=item new($mux, $url, @urlargs)
+use Scalar::Util qw(blessed);
 
-Connects to an RPC server via the URL given in $url. Such URLs can be of the
-forms specified in L<RPC::Async::URL>, although it must connect to a
-bi-directional stream socket. Alternatively, pass an open file descriptor.
-
-=cut
-
-sub new {
-    my ($class, $mux, $url, @args) = @_;
-
-    my %self = (
-        mux => $mux,
-        requests => {},
-        serial => -1,
-        coderefs => {},
-        buffer => new IO::Buffered(Size => ["N", -4]),
-    );
-    # FIXME: Rethrow this exception
-    my ($fh, @urlargs) = url_connect($url, @args); 
-    $mux->add($fh);
-    $self{fh} = $fh;
-    $self{urlargs} = \@urlargs;
-
-    if(wantarray) {
-        return(bless(\%self, (ref $class || $class)), @urlargs);
-    } else {
-        return bless(\%self, (ref $class || $class));
-    }
-}
+our $AUTOLOAD;
 
 sub AUTOLOAD {
     my $self = shift;
-    our $AUTOLOAD;
     my $procedure = $AUTOLOAD;
     $procedure =~ s/.*:://;
+    
+    croak "Call to local non-existing function $procedure without self : $self"
+        if !blessed($self);
+
     return $self->call($procedure, @_);
 }
 
 # Define empty DESTROY() so it is not cought in the AUTOLOAD
 sub DESTROY { }
 
-=item call($procedure, @args, $subref)
+=head2 C<new( [%options] )>
+
+Constructs an RPC::Async::Client object
+
+The optional parameters for the handle will be taken from the RPC::Async::Client
+object if not given here:
+
+=over
+
+=item Retries
+
+Set the number of reconnect retries before the RPC::Async::Client gives up and
+throws an error.
+
+=item Timeout
+
+The default timeout in number of seconds a RPC has to complete before the
+function returns the call with a "timeout" error.
+
+A value of 0 disables timeout handling and it will then be up to the server to
+handle this.
+
+The default can be overridden on a pr. function basis with the C<set_options()>
+call.
+
+=item CloseOnIdle
+
+Specifies if servers should be disconnect when the RPC::Async::Client has no
+more work.
+
+The default is 0.
+
+=item CloseTimeout
+
+The number of seconds to wait for server to close before calling kill on it's
+pid.
+
+=item WaitpidTimeout
+
+The number of seconds to wait after all server filehandles have been closed before
+collecting the pid.
+
+=item KillTimeout
+
+The number of seconds to wait after kill -1 has been called on the server pid,
+before either collecting the pid or doing a kill -9 on the pid.
+
+=item Serialize
+
+Overrides the default serialization  function. TODO: Write more   
+
+=item DeSerialize
+
+Overrides the default deserialization function. TODO: Write more   
+
+=item Output
+
+Overrides the default server output function when RPC::Async::Client is handling
+the server STDOUT and STDERR. TODO: Write more   
+
+=item Reconnect
+
+Overrides the default Reconnect function. TODO: Write more   
+
+=item MaxRequestSize
+
+Sets the max request size that RPC::Client::Async can handle. This is used to
+limit the amount of memmory that a request will take when doing the
+deserialization.
+
+The default value is 10MB.
+
+=back
+
+=cut
+
+sub new {
+    my ($class, %args) = @_;
+
+    if($args{Serialize}) {
+        croak "Argument Serialize is not a code ref" 
+            if !ref $args{Serialize} eq 'CODE';
+        
+        *RPC::Async::Client::_serialize = $args{Serialize};
+    } else {
+        *RPC::Async::Client::_serialize =\&RPC::Async::Util::serialize_storable;
+    }
+
+    if($args{DeSerialize}) {
+        croak "Argument DeSerialize is not a code ref" 
+            if !ref $args{DeSerialize} eq 'CODE';
+
+        *RPC::Async::Client::_deserialize = $args{DeSerialize};
+    } else {
+        *RPC::Async::Client::_deserialize = \&RPC::Async::Util::deserialize_storable;
+    }
+
+    if($args{Output}) {
+        croak "Argument Output is not a code ref" 
+            if !ref $args{Output} eq 'CODE';
+            *_output = $args{Output};
+    } else {
+        *_output = \&RPC::Async::Util::output;
+    }
+
+    if($args{Reconnect}) {
+        croak "Argument Output is not a code ref" 
+            if !ref $args{Reconnect} eq 'CODE';
+        *RPC::Async::Client::_try_reconnect = $args{Reconnect};
+    }
+
+    my $self = bless {
+        requests => {}, # { $id => { callback => sub {}, ... }, ... }
+        serial => 0,
+        coderefs => {}, # { $id => sub { ... }, ... }
+        fhs => {}, # { $fh => $fh, .. }
+        rrs => [], # [ $fh, ... ]
+        inputs => {}, # { $fh => 'data', ... } Input buffer
+        
+        timeouts => [], # [[time + $timeout, $id], ...]
+
+        max_request_size => defined $args{MaxRequestSize} ?
+            $args{MaxRequestSize} : 10 * 1024 * 1024, # 10MB
+
+        # Connect retries
+        connect_args  => {},
+        connect_retries => defined $args{Retries} ? $args{Retries} : 3,
+        
+        # Connect timeouts
+        default_timeout => defined $args{Timeout} ? $args{Timeout} : 3,
+        procedure_timeouts => {},
+        
+        # Rate limitation
+        default_limit => defined $args{Limit} ? $args{Limit} : 0,
+        outstanding => 0, 
+       
+        # TODO: implement code that uses this.
+        limit_key => '', # 
+        key_queue => {}, # { key => [$id, ...] }
+        waiting => [], # [ $id, ...]
+
+        # Server extra output handling: eg. stdout, stderr
+        extra_streams => {}, # { $stream_fh => [$rpc_fh, $type], ... }
+        extra_fhs => {}, # { $rpc_fh => { $stream_fh => $type, ... } }
+
+        mux => $args{Mux},
+
+        close_on_idle => defined $args{CloseOnIdle} ? $args{CloseOnIdle} : 0,
+
+        close_timeout => defined $args{CloseTimeout} ? $args{CloseTimeout} : 1,
+        waitpid_timeout => defined $args{WaitPidTimeout} ? 
+            $args{WaitPidTimeout} : 1,
+        kill_timeout => defined $args{KillTimeout} ? $args{KillTimeout} : 1,
+        
+        pids => {}, # { $fh => $pid, ... }
+        waitpid_ids => {}, # { $fh => $id }
+        
+    }, $class;
+
+    unlink "client.tmp";
+    unlink "client-input.tmp";
+    unlink "client-buffer.tmp";
+
+    return $self;
+}
+
+=head2 C<call($procedure, @args, $subref)>
 
 Performs a remote procedure call. Rather than using this directly, this package
 enables some AUTOLOAD magic that allows calls to remote procedures directly on
@@ -111,58 +268,300 @@ procedures may return in a different order than they were called in.
 Fairly complex data structures may be given as arguments, except for circular
 ones. In particular, subroutine references are allowed.
 
-The call itself is given a uniq id that is returned and can later be used
-with other subs.
+Each call is given a uniq id that is returned and can be used to identify the
+specific call on both client and server.
 
 =cut
 
 sub call {
     my ($self, $procedure, @args) = @_;
     my $callback = pop @args;
-   
-    croak "Called RPC function $procedure without callback" if !$callback;
-
-    @args = $self->_encode_args(@args);
-
+    
+    croak "Called RPC function $procedure without callback" 
+        if ref $callback ne 'CODE';
+    
     my $id = $self->_unique_id;
     $self->{requests}{$id} = { 
         callback => $callback, 
         procedure => $procedure,
-        args => \@args 
+        args => encode_args($self, \@args), 
     };
 
-    #print "RPC::Async::Client sending: $id $procedure @args\n";
-    $self->{mux}->send($self->{fh}, make_packet([ $id, $procedure, @args ]));
+    push(@{$self->{waiting}}, $id);
 
     return $id;
 }
 
-=item disconnect
+=head2 C<timeout()>
 
-Call this to gracefully disconnect from the server without leaving zombie
-processes or such.
+Returns the next timeout in seconds.
+
+NOTE: This function should always be called as it also does the data sending.
 
 =cut
 
-sub disconnect {
+sub timeout {
     my ($self) = @_;
-    $self->{mux}->kill($self->{fh});
-    url_disconnect($self->{fh}, @{$self->{urlargs}});
+    my $timeouts = $self->{timeouts};
+    
+    # Handle timeouts
+    my $time = time;
+    my $timeout = undef;
+    while(my $item = shift @{$self->{timeouts}}) {
+        next if !exists $self->{requests}{$item->[1]};
+        
+        if($item->[0] <= $time) {
+            if (my $request = delete $self->{requests}{$item->[1]}) {
+                $self->{outstanding}--;
+                $@ = 'timeout';
+                $request->{callback}->();
+            }
+        
+        } else {
+            $timeout = $item->[0] - $time;
+            # No more items timed out, put back on queue.
+            unshift(@{$self->{timeouts}}, $item);
+            last;
+        }
+    };
+
+    # Send outstanding rpc packets
+    while (my ($fh, $data) = $self->_data()) {
+        # DEBUG CODE
+        #use File::Slurp;
+        #write_file('client.tmp', { binmode => ':raw', append => 1 }, "<start>".$data."<end>");
+
+        print "Sending packed data: $fh:\n" if $TRACE;
+        $self->{mux}->send($fh, $data);
+    }
+
+    # Check if we still have outstanding requests else close connection to server
+    if($self->{close_on_idle} and !$timeout and !$self->has_work) {
+        $self->{quitting} = 1;
+        #use Data::Dumper; print Dumper($self->{timeouts}, $timeout);
+        print "timeout: no more work\n" if $DEBUG;
+        foreach my $fh (values %{$self->{fhs}}) {
+            print "kill $fh\n" if $TRACE;
+            $self->{mux}->kill($fh);
+        }
+    }
+
+    #print Dumper($timeouts, $timeout);
+    #print("timeout(".time()."): ".(defined $timeout ? $timeout : 'undef')."\n");
+
+    return $timeout;
 }
 
-=item has_requests
 
-Returns true iff there is at least one request pending. Usually, this means that
+=head2 C<set_options($procedure, %options)>
+
+Sets procedure specific options.
+
+=over
+
+=item Timeout
+
+Sets the number of seconds before a specific RPC procedure times out. If 0 is
+given then no timeout handling is done on the client side. A value smaller than
+0 can be used to revert the procedure to default timeout handling.
+
+=back
+
+=cut
+
+sub set_options {
+    my ($self, $procedure, %args) = @_;
+    
+    if(exists $args{Timeout}) {
+        my $timeout = $args{Timeout};
+        if($timeout >= 0) {
+            $self->{procedure_timeouts}{$procedure} = $timeout;
+        } else {
+            delete $self->{procedure_timeouts}{$procedure}
+        }
+    } else {
+        croak "No known options set";
+    }
+}
+
+
+=head2 C<connect($url, @args)>
+
+Simple wrapper to make it easy to connect to a server. TODO: write more
+
+=cut
+
+sub connect {
+    my($self, $url, @args) = @_;
+    my $mux = $self->{mux};
+
+    if($url =~ /perl2/) {
+        my ($fh, $pid, $stdout, $stderr) = url_connect($url, @args);
+        $self->add($fh, 
+            Pid => $pid, 
+            Streams => {
+                stdout => $stdout,
+                stderr => $stderr,
+            },
+        );
+        $mux->add($fh);
+        $mux->add($stdout);
+        $mux->add($stderr);
+        print "Added $fh, $stdout, $stderr\n";
+        $self->{connect_args}{$fh} = [$url, @args];
+    } else {
+        croak "unknown url type : $url";
+    }
+}
+
+
+=head2 C<add($fh, %options)>
+
+Add new filehandles to RPC::Async::Client. TODO: write more
+
+=over
+
+=item Pid
+
+The pid of the server that is connected to the $fh.
+
+=item Stream => { $type => $stram_fh }
+
+Other filehandles or streams related to the server, such as STDOUT or STDERR.
+TODO: Write about output()
+
+=back
+
+=cut
+
+sub add {
+    my ($self, $fh, %args) = @_;
+    
+    if(keys %args) {
+        if($args{Pid}) {
+            $self->{pids}{$fh} = $args{Pid};
+        }
+        if($args{Streams}) {
+            foreach my $type (keys %{$args{Streams}}) {
+                my $stream_fh = $args{Streams}{$type};
+                $self->{extra_streams}{$stream_fh} = [$fh, $type];
+                $self->{extra_fhs}{$fh}{$stream_fh} = $type;
+            }
+        }
+    }
+    
+    $self->{fhs}{$fh} = $fh;
+    push(@{$self->{rrs}}, $fh);
+}
+
+=head2 C<io($event>
+
+Inspect an L<IO::EventMux> event. All such events must be passed through here
+in order to handle asynchronous replies. If the event was handled, 1 is
+returned. Otherwise undef is returned.
+
+=cut
+
+sub io {
+    my ($self, $event) = @_;
+    my $mux = $self->{mux};
+    my($type, $fh, $data) = ($event->{type}, $event->{fh}, $event->{data});
+
+    # Only do something on events that have a filehandle
+    return if !defined $fh;
+    
+    # Check if this fh is handled by RPC
+    if(exists $self->{fhs}{$fh}) {
+        print "do_io: $type\n" if $TRACE;
+        #print "fh: $fh\n" if $fh;
+
+        if($type eq 'read') {
+            # DeSerialize and call callbacks 
+            eval { $self->_append($fh, $data); };
+            # TODO: Check for RPC: call to limit 
+            if($@) {
+                print Dumper($@);
+                print "killed connection because of '$@'\n";
+                # Try to reconnect if this was unexpected
+                $mux->kill($fh);
+                $self->_try_reconnect($fh, 'read');
+            }
+
+        } elsif($type eq 'closing' or $type eq 'closed') {
+            # Try to reconnect if this was unexpected
+            $self->_try_reconnect($fh, 'closing');
+       
+            # Check if all extra fh's are close for this server 
+            if(keys %{$self->{extra_fhs}{$fh}} == 0) {
+                print "main: last file handle for this server\n";
+                # Collect server pid
+                $self->_waitpid_timeout($fh, $self->{waitpid_timeout}, 1);
+            
+            } elsif(my $timeout = $self->{close_timeout}) {
+                # Kill the server
+                $self->_kill_timeout($fh, $timeout, 1);
+            }
+
+
+        } elsif($type eq 'error') {
+            # Close the server if the connection is closed
+            print Dumper($event);
+            # Try to reconnect if this was unexpected
+            $mux->kill($fh);
+            $self->_try_reconnect($fh, 'errro');
+        }
+        
+        return 1;
+
+    } elsif(my $item = $self->{extra_streams}{$fh}) {
+        if($type eq 'read') {
+            _output($item->[0], $item->[1], $data);
+        
+        } elsif($type eq 'closed') {
+            delete $self->{extra_streams}{$fh};
+            delete $self->{extra_fhs}{$item->[0]}{$fh};
+
+            # Check if all extra fh's are close for this server 
+            if(keys %{$self->{extra_fhs}{$item->[0]}} == 0) {
+                print "extra: last file handle for this server\n";
+                # Collect pid for this server
+                $self->_waitpid_timeout($item->[0], 
+                    $self->{waitpid_timeout}, 1);
+            }
+        }
+        
+        return 1;
+    
+    } else {
+        return;
+    }
+}
+
+
+=head2 has_work
+
+Returns true if the RPC::Async::Client still has work to do such as waiting for outstanding requests, coderefs or for a server to terminate.
+
+=cut
+
+sub has_work {
+    my ($self) = @_;
+    return (scalar %{$self->{coderefs}} or scalar %{$self->{requests}}); 
+}
+
+=head2 has_requests
+
+Returns true if there is at least one request pending. Usually, this means that
 we should not terminate yet.
 
 =cut
 
 sub has_requests {
-    my ($self, $event) = @_;
+    my ($self) = @_;
     return scalar %{$self->{requests}};
 }
 
-=item has_coderefs
+=head2 has_coderefs
 
 Returns true if the remote side holds a reference to a subroutine given to it
 in an earlier call. Depending on the application, this may be taken as a hint
@@ -172,40 +571,11 @@ with Perl's garbage collector on the server side.
 =cut
 
 sub has_coderefs {
-    my ($self, $event) = @_;
+    my ($self) = @_;
     return scalar %{$self->{coderefs}};
 }
 
-=item io($event)
-
-Inspect an event from EventMux. All such events must be passed through here in
-order to handle asynchronous replies. If the event was handled, C<undef> is
-returned. Otherwise, the event is returned for processing by other
-RPC::Async::Client handlers or the main program itself.
-
-=cut
-
-sub io {
-    my ($self, $event) = @_;
-
-    if ($event->{fh} and $event->{fh} == $self->{fh}) {
-        my $type = $event->{type};
-        if ($type eq "read") {
-            #print "RPC::Async::Client got ", length $event->{data}, " bytes\n";
-            $self->_handle_read($event->{fh}, $event->{data});
-
-        } elsif ($type eq "closed") {
-            die __PACKAGE__ .": server disconnected\n";
-        }
-
-        return;
-
-    } else {
-        return $event;
-    }
-}
-
-=item dump_requests
+=head2 dump_requests
 
 Returns requests that are pending as HASH ref. For debugging only.
 
@@ -216,108 +586,132 @@ sub dump_requests {
     return $self->{requests};
 }
 
-=item wait($timeout, [@ids])
 
-Block until we have enough events from the RPC server to matches all the
-id's listed or we get a timeout. If no id's are given then any id will be 
-used. This function can be useful when we want to make sure the server is 
-started in the other end, fx. if we need to connect to it on another socket. 
+=head2 dump_timeouts
 
-If all events was received in time, 1 is returned, C<undef> is returned on 
-timeout.
-
-Any unrelated events will be buffered and pushed back on the stack when the
-wait call has finished.
+Returns timeouts that are pending as ARRAY ref. For debugging only.
 
 =cut
 
-sub wait {
-    my ($self, $timeout, @ids) = @_;
+sub dump_timeouts {
+    my ($self) = @_;
+    return $self->{timeouts};
+}
+
+=head2 dump_coderefs
+
+Returns coderefs that are pending as HASH ref. For debugging only.
+
+=cut
+
+sub dump_coderefs {
+    my ($self) = @_;
+    return $self->{coderefs};
+}
+
+## Private subs ##
+
+sub _append {
+    my ($self, $fh, $data) = @_;
+    croak "fh is undefined" if !defined $fh;
+    croak "fh $fh not managed by RPC::Client" if !exists $self->{fhs}{$fh};
+    croak "data is undefined" if !defined $data;
     
-    # Check if $timeout is a number
-    croak "Timeout should be a number" if !(defined $timeout 
-        and $timeout =~ /^-?\d+$/);
+    # DEBUG CODE
+    #use File::Slurp;
+    #write_file('client-input.tmp', { binmode => ':raw', append => 1 }, $data);
+
+    $self->{inputs}{$fh} .= $data;
     
-    my %match = map { $_ => 1 } @ids;
-    my $count = (int @ids or 1);
-    my $mux = $self->{mux};
-    my $start = time;
+    #write_file('client-buffer.tmp', { binmode => ':raw' }, $self->{inputs}{$fh});
+        
+    my @ids;
+    while(length($self->{inputs}{$fh}) > 0) {
+        my $packet = _deserialize(\$self->{inputs}{$fh},
+            $self->{max_request_size});
+        
+        # Drop out of loop if we need more data 
+        last if !$packet; 
+        
+        my ($id, $type, @args) = @{$packet};
+    
+        croak "Not a valid id" if !(defined $id or $id =~ /^\d+$/);
+       
+        #print Dumper({id => $id, type => $type, args => \@args});
 
-    my @events;
-    while($count and my $event = $mux->mux($timeout)) {
-        if ($event->{fh} and $event->{fh} == $self->{fh}) {
-            if ($event->{type} eq "read") {
-                my @ids = $self->_handle_read($event->{fh}, $event->{data});
-                foreach my $id (@ids) {
-                    if(exists $match{$id} or @ids == 0) {
-                        $count--;
-                    }
-                }
+        if (my $request = delete $self->{requests}{$id}) {
+            push(@ids, $id);
+            
+            $self->{outstanding}--;
 
-            } elsif($event->{type} eq 'timeout') {
-                last;
+            # Save exception state
+            my $old_exception = $@;
+            
+            # We got an exception
+            if($type eq 'die') { $@ = shift @args; }
+            $request->{callback}->(@args);
+            
+            # Restore exception state
+            $@ = $old_exception;
 
-            } elsif ($event->{type} eq "closed") {
-                die __PACKAGE__ .": server disconnected\n";
+        } elsif (exists $self->{coderefs}{$id}) {
+            if ($type eq "destroy") {
+                delete $self->{coderefs}{$id};
+            } elsif ($type eq "call") {
+                $self->{coderefs}{$id}->(@args);
+            } else {
+                croak "Unknown type for callback: $type";
             }
 
         } else {
-            push @events, $event;
-        }
-
-        # Check that we still have timeout left
-        $timeout = $timeout - (time - $start);
-        if($timeout <= 0) {
-            last;
+            warn "Spurious reply to id $id\n" if $DEBUG;
         }
     }
-
-    $mux->push_event(@events);
-    return $count > 0?undef:1;
+    return @ids;
 }
 
-sub _handle_read {
-    my ($self, $fh, $data) = @_;
-    my @ids;
+sub _data {
+    my($self) = @_;
 
-    my $buffer = $self->{buffer};
-    $buffer->write($data);
-    foreach my $data ($buffer->read()) {
-        my $thawed = eval { thaw $data }; 
+    # TODO: Make into croak
+    # Don't give output if we have no connected servers
+    return if !keys %{$self->{fhs}};
+
+    my $limit = $self->{default_limit};
+    return if $limit > 0 and $self->{outstanding} >= $limit; 
+
+    if(my $id = shift @{$self->{waiting}}) {
+        my $request = $self->{requests}{$id} 
+            or die "Could not find id: $id";
+
+        # TODO: Check in key_queue if we have a limit_key on the request that
+        # match and we can queue a new item from key_queue on @waiting.
+
+        # Find fh to use
+        my $n = $self->{serial} % int @{$self->{rrs}};
+        my $fh = $self->{rrs}[$n];
         
-        if($@) {
-            warn __PACKAGE__.": Bad data in packet: $@\n";
-            warn __PACKAGE__.": Disconnecting from server: $@\n";
-            $self->{mux}->kill($fh);
-            last;
-        
-        } elsif (ref $thawed eq "ARRAY" and @$thawed >= 1) {
-            my ($id, @args) = @$thawed;
-            my $request = delete $self->{requests}{$id};
-            
-            if (defined $request) {
-                push(@ids, $id);
-                #print __PACKAGE__, ": callback(@args)\n";
-                my $callback = $request->{callback};
-                $callback->(@args);
-
-            } elsif (exists $self->{coderefs}{$id}) {
-                my ($command, @cb_args) = @args;
-                if ($command eq "destroy") {
-                    delete $self->{coderefs}{$id};
-                } elsif ($command eq "call") {
-                    $self->{coderefs}{$id}->(@cb_args);
-                } else {
-                    warn __PACKAGE__.": Unknown command for callback";
-                }
-
-            } else {
-                warn __PACKAGE__.": Spurious reply to id $id\n";
-            }
-        }
-    }
+        # Serialize data
+        my $data = _serialize([$id, $request->{procedure}, 
+            @{$request->{args}}]);
+      
+        # Registre the fh to the id
+        $request->{fh} = $fh;   
     
-    return @ids;
+        # Use custom timeout if we have it else use default timeout
+        my $timeout = $self->{procedure_timeouts}{$request->{procedure}};
+        $timeout = defined $timeout ? $timeout : $self->{default_timeout};
+        
+        # Add id to timeout queue with now time + $timeout
+        $self->_queue_timeout(time + $timeout, $id) if $timeout;
+
+        # Increment outstanding requests counter
+        $self->{outstanding}++;
+
+        return ($fh, $data);
+    }
+
+    return;
 }
 
 sub _unique_id {
@@ -327,41 +721,145 @@ sub _unique_id {
     return $self->{serial} &= 0x7FffFFff;
 }
 
-sub _encode_args {
-    my ($self, @args) = @_;
-
-    return map {
-        my $arg = $_;
-        if (not ref $arg) {
-            $arg;
-        } elsif (ref $arg eq "ARRAY") {
-            [ $self->_encode_args(@$arg) ];
-        } elsif (ref $arg eq "HASH") {
-            my %h;
-            keys %h = scalar keys %$arg; # preallocate buckets
-            foreach my $key (keys %$arg) {
-                my ($v) = $self->_encode_args($arg->{$key});
-                $h{$key} = $v;
+sub _queue_timeout {
+    my ($self, $timeout, $id) = @_;
+    my $timeouts = $self->{timeouts};
+    if(@{$timeouts} == 0 or $timeout >= $timeouts->[-1][0]) {
+        # The queue is empty or item belongs in the end of the queue
+        push(@{$timeouts}, [$timeout, $id]);
+    } else {
+        # Try to insert the item from the back
+        for(my $i=int(@{$timeouts})-1; $i >= 0; $i--) {
+            if($timeout >= $timeouts->[$i][0]) {
+                # The item fits somewhere in the middle
+                splice(@{$timeouts}, $i+1, 0, [$timeout, $id]);
+                last;
+            } elsif ($i == 0) {
+                # The item was small than anything else
+                unshift (@{$timeouts}, [$timeout, $id]);
             }
-            \%h;
-        } elsif (ref $arg eq "Regexp") {
-           #TODO: Copy over regexp options /ig etc.
-           $arg =~ /:(.*)\)$/;
-           $1;
-        } elsif (ref $arg eq "REF") {
-            my ($v) = $self->_encode_args($$arg);
-            \$v;
-        } elsif (ref $arg eq "CODE") {
-            my $id = $self->_unique_id;
-            $self->{coderefs}{$id} = $arg;
-            RPC::Async::Coderef->new($id);
-        } else {
-            $arg;
         }
-    } @args;
+    }
 }
 
-=back
+sub _waitpid_timeout {
+    my($self, $fh, $timeout, $signal, $last_signal) = @_;
+    my $pid = $self->{pids}{$fh} or return;
+
+    while(my $id = shift @{$self->{waitpid_ids}{$fh}}) {
+        print "delete $id\n";
+        delete $self->{requests}{$id};
+    }
+
+    # Queue timeout to collect pid 
+    my $id = $self->_unique_id;
+    $self->{requests}{$id} = { 
+        callback => sub {
+            $self->_waitpid($fh, $signal, $last_signal);
+        },
+        procedure => '_waitpid',
+    };
+    $self->_queue_timeout(time + $timeout, $id);
+    push(@{$self->{waitpid_ids}{$fh}}, $id);
+    print "waitpid id: $id\n";
+}
+
+sub _waitpid {
+    my($self, $fh, $signal, $last_signal) = @_;
+    my $pid = $self->{pids}{$fh} or return;
+    
+    my $res = waitpid($pid, 1); # WNOHANG
+    my $status = $? >> 8;
+    print "waitpid($pid): $status - $res\n";
+
+    if($pid != $res) {
+        $self->_kill($fh, $signal, $last_signal);
+    } else {
+        delete $self->{pids}{$fh};
+        # Delete the id waiting in requests if we cought the waitpid before
+        while(my $id = shift @{$self->{waitpid_ids}{$fh}}) {
+            print "collected pid $pid on id $id\n";
+            print Dumper(delete $self->{requests}{$id});
+        }
+    }
+}
+
+sub _kill_timeout {
+    my($self, $fh, $timeout, $signal, $last_signal) = @_;
+    my $pid = $self->{pids}{$fh} or return;
+ 
+    # Queue timeout to collect pid 
+    my $id = $self->_unique_id;
+    $self->{requests}{$id} = { 
+        callback => sub {
+            $self->_kill($fh, $signal, $last_signal);
+        },
+        procedure => '_kill',
+    };
+    $self->_queue_timeout(time + $timeout, $id);
+    push(@{$self->{waitpid_ids}{$fh}}, $id);
+    print "kill id: $id\n";
+}
+
+sub _kill {
+    my($self, $fh, $signal, $last_signal) = @_;
+    my $pid = $self->{pids}{$fh} or return;
+
+    # Die if kill -9 failed 
+    die "Could not kill($pid, 9)" if $last_signal and $last_signal == 9;
+
+    # Kill pid 
+    kill $signal, $pid; 
+    print "kill($signal, $pid)\n";
+    
+    # Try to waitpid and kill with 9 if that did not work
+    $self->_waitpid_timeout($fh, $self->{kill_timeout}, 9, $signal);
+}
+
+sub _try_reconnect {
+    my ($self, $fh, $type) = @_;
+    my $connect_args = $self->{connect_args}{$fh};
+
+    print "try_reconnect($type): $fh\n" if $TRACE;
+    
+    # Close server filehandle and put requests back in waiting queue
+    $self->_close($fh); 
+   
+    # Try reconnection if we have requests waiting
+    if ($connect_args and $self->{waiting} > 0 and !$self->{quitting}) {
+        if(--$self->{connect_retries} > 0) {
+            print "reconnect($type): $connect_args->[0]\n";
+            $self->connect(@{$connect_args});
+        } else {
+            croak "no more connect retries";
+        }
+    }
+}
+
+sub _close {
+    my($self, $fh) = @_;
+
+    foreach my $id (keys %{$self->{requests}}) {
+        if($self->{requests}{$id}{fh} eq $fh) {
+            delete $self->{requests}{$id}{fh}; 
+            push(@{$self->{waiting}}, $id);
+            
+            # Remake the Round Robin array with out the closed $fh
+            @{$self->{rrs}} = grep { $_ ne $fh } @{$self->{rrs}};
+        }
+    }
+    delete $self->{fhs}{$fh};
+    delete $self->{inputs}{$fh};
+    delete $self->{connect_args}{$fh};
+    
+    # Set to kill after
+
+    return $fh;
+}
+
+=head1 DIAGNOSTICS
+
+TODO: Errors and warnings that the application can generate
 
 =head1 AUTHOR
 
@@ -369,7 +867,8 @@ Troels Liebe Bentsen <tlb@rapanden.dk>, Jonas Jensen <jbj@knef.dk>
 
 =head1 COPYRIGHT
 
-Copyright(C) 2005-2007 Troels Liebe Bentsen
+Copyright(C) 2005-2009 Troels Liebe Bentsen
+
 Copyright(C) 2005-2007 Jonas Jensen
 
 This library is free software; you can redistribute it and/or modify

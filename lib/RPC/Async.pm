@@ -3,7 +3,7 @@ use warnings;
 
 package RPC::Async;
 
-our $VERSION = '1.05';
+our $VERSION = '2.00';
 
 1;
 
@@ -27,13 +27,16 @@ L<IO::EventMux> to control their main loop, but this is still very flexible.
 The two ends of this framework are documented in L<RPC::Async::Client> and
 L<RPC::Async::Server>.
 
+TODO: Update documentation to reflect the new changes in the code also tell
+about all the wonderfull features 
+
 =head1 AUTHOR
 
 Jonas Jensen <jbj@knef.dk>, Troels Liebe Bentsen <tlb@rapanden.dk> 
 
 =head1 COPYRIGHT
 
-Copyright(C) 2005-2007 Troels Liebe Bentsen
+Copyright(C) 2005-2009 Troels Liebe Bentsen
 
 Copyright(C) 2005-2007 Jonas Jensen
 

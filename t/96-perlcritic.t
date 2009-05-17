@@ -5,8 +5,10 @@ use Test::More;
 
 eval { 
     require Test::Perl::Critic;
-    import  Test::Perl::Critic(-profile => 't/perlcriticrc');
 };
 plan skip_all => 'Test::Perl::Critic required to criticise code' if $@;
+plan skip_all => "Currently a developer-only test" if !$ENV{TEST_AUTHOR};
 
-all_critic_ok('blib');
+import Test::Perl::Critic(-profile => 't/perlcriticrc');
+
+all_critic_ok();

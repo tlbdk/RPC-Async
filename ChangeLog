@@ -1,3 +1,13 @@
+Version 2.00 ()
+ * Major rewrite of RPC::Async Framework with a lot of new features:
+   * Server Round Robin
+   * Automatic restarting of misbehaving servers
+   * Waitpid handling
+   * STDOUT, STDERR handling
+   * Cleaner API with simpler usage
+   * Buildin client side timeout handling
+   * Buildin client side outstanding requests limits.
+
 Version 1.06 ()
  * Fixed bug in url_connect() with perl.*:// protocol: stdout and stderr was
    not returned when perl.*2 was given.

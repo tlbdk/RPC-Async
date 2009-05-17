@@ -1,8 +1,9 @@
 package RPC::Async::Util;
 use strict;
 use warnings;
+use Carp;
 
-our $VERSION = '1.05';
+our $VERSION = '2.00';
 
 =head1 NAME
 
@@ -13,16 +14,185 @@ RPC::Async::Util - util module of the asynchronous RPC framework
 use base "Exporter";
 use Class::ISA;
 use Storable qw(nfreeze thaw);
+use Data::Dumper;
 
-our @EXPORT_OK = qw(make_packet expand);
+our @EXPORT_OK = qw(expand encode_args decode_args);
 
 =head1 METHODS
 
-=over
+=cut
+
+=head2 C<serialize_storable($object)>
+
+Returns a storable serialized data from $object with 32bit network order
+length bytes in the start of data.
 
 =cut
 
-=item expand($ref, $in)
+sub serialize_storable {
+    my $data = nfreeze($_[0]);
+    $data = pack("N", length($data)).$data;
+    croak "RPC: Freeze to small: ".Dumper($_[0]) if length($data) < 12;
+    return $data;
+}
+
+=head2 C<deserialize_storable(\$data, $max_size)>
+
+Returns a deserialized $object from reference to $data. $data needs to be encoded
+with storable and start with 32bit network order length bytes. $data is cut by
+the number of bytes consumed to generate the $object.
+
+=cut
+
+# TODO: Take maximum data size as a argument so we can throw 
+sub deserialize_storable {
+    croak "RPC: not a reference to the buffer" if (ref $_[0] ne 'SCALAR');
+    croak "RPC: undefined variable in refrence" if !defined ${$_[0]};
+    return if length(${$_[0]}) < 4;
+    
+    my $length = unpack("N", substr(${$_[0]}, 0, 4));
+    croak "RPC: length bytes size is to big" if $length > $_[1];
+    if(length ${$_[0]} >= $length) {
+        my $thawed = eval { thaw substr(${$_[0]}, 4, $length); };
+        
+        if($@) {
+            for(my $i=0; $i<length(${$_[0]});$i++) {
+                my $char = substr(${$_[0]}, $i, 1);
+                #print sprintf("0x%02x(%03d)", ord($char), ord($char));
+            }
+            print "\n";
+            die("RPC: Bad data in packet(".length(${$_[0]})."): $@");
+
+        } elsif (ref $thawed eq "ARRAY" and @$thawed >= 1) {
+            # Remove deserialize part of buffer
+            substr(${$_[0]}, 0, $length + 4) = '';
+            return $thawed;
+        }
+    }
+    
+    return;
+}
+
+=head2 C<output($fh, $type, $data)>
+
+TODO: Write more
+
+=cut
+
+sub output {
+    my ($fh, $type, $data) = @_;
+    print uc($type)."($fh): $data";
+}
+
+=head2 C<encode_args($self, \$args)>
+
+TODO: Write more
+
+=cut
+
+sub encode_args {
+    my ($self, $args) = @_;
+    my @result;
+
+    my @walk = ($args);
+    while(my $obj = shift @walk) {
+        my $type = ref($obj);
+        #print "$type : $obj\n";
+
+        if($type eq 'REF') { # Refrence
+            $type = ref $$obj;
+            if ($type eq "Regexp") {
+                $$obj = RPC::Async::Regexp->new($$obj);
+            
+            } elsif ($type eq "CODE") {
+                my $id = $self->_unique_id;
+                $self->{coderefs}{$id} = $$obj;
+                $$obj = RPC::Async::Coderef->new($id);
+            
+            } elsif (UNIVERSAL::isa($$obj, "IO::Socket")) {
+                # TODO: Allow this for unix domain sockets 
+                croak "RPC: Cannot pass IO::Socket objects";
+
+            } else {
+                croak "RPC: Unknown scalar type $type";
+            }
+        
+        } elsif($type eq 'HASH') { # Hash
+            push(@walk, map { (ref $_ eq 'HASH' or ref $_ eq 'ARRAY') 
+                    ? $obj->{$_} : \$obj->{$_} } keys %{$obj});
+        
+        } elsif($type eq 'ARRAY') { # Array
+            push(@walk, map { (ref $_ eq 'HASH' or ref $_ eq 'ARRAY') 
+                    ? $_ : \$_ } @{$obj});
+        
+        } elsif($type eq 'SCALAR') {
+            # IGNORE
+        } else {
+            croak "RPC: Unknown scalar type $type";
+        }
+    }
+    
+    return $args;
+}
+
+=head2 C<decode_args($self, $fh, \$args)>
+
+TODO: Write more
+
+=cut
+
+sub decode_args {
+    my ($self, $fh, $args) = @_;
+    my @result;
+
+    my @walk = ($args);
+    while(my $obj = shift @walk) {
+        my $type = ref($obj);
+        #print "$type : $obj\n";
+
+        if($type eq 'REF') { # Refrence
+            $type = ref $$obj;
+            if (UNIVERSAL::isa($$obj, "RPC::Async::Regexp")) {
+                $$obj = $$obj->build();
+            
+            } elsif (UNIVERSAL::isa($$obj, "RPC::Async::Coderef")) {
+                my $id = $$obj->id;
+                #use Data::Dumper; 
+                #print Dumper({ obj => $$obj });
+            
+                # Setup the callbacks to push on the waiting queue
+                $$obj->set_call(sub {
+                    push(@{$self->{waiting}}, [$fh, $id, "call", @_])
+                });
+                $$obj->set_destroy(sub {
+                    push(@{$self->{waiting}}, [$fh, $id, "destroy", @_])
+                });
+                
+                #push(@{$self->{coderefs}{$fh}}, $obj);
+
+            } else {
+                croak "RPC: Unknown scalar type $type";
+            }
+        
+        } elsif($type eq 'HASH') { # Hash
+            push(@walk, map { (ref $_ eq 'HASH' or ref $_ eq 'ARRAY') 
+                    ? $obj->{$_} : \$obj->{$_} } keys %{$obj});
+        
+        } elsif($type eq 'ARRAY') { # Array
+            push(@walk, map { (ref $_ eq 'HASH' or ref $_ eq 'ARRAY') 
+                    ? $_ : \$_ } @{$obj});
+        
+        } elsif($type eq 'SCALAR') {
+            # IGNORE
+        } else {
+            croak "RPC: Unknown scalar type $type";
+        }
+    }
+    
+    return $args;
+}
+
+=head2 expand($ref, $in)
 
 Expands and normalizes the def_* input and output definitions to a unified
 order and naming convention.
@@ -61,22 +231,9 @@ sub expand {
     return $ref;
 }
 
-=item make_packet($ref)
-
-Generate a packet for sending.
-
-=cut
-
-sub make_packet {
-    my ($ref) = @_;
-
-    my $frozen = nfreeze($ref);
-    return pack("N", 4 + length $frozen) . $frozen;
-}
-
 #use Misc::Common qw(treewalk); # FIXME: Put in own module instead
 
-=item treewalk($tree, $replace_key, $replace_value)
+=head2 treewalk($tree, $replace_key, $replace_value)
 
 Sub used to walk a tree structure.
 
@@ -136,15 +293,13 @@ sub treewalk {
     }
 }
 
-=back
-
 =head1 AUTHOR
 
 Jonas Jensen <jbj@knef.dk>, Troels Liebe Bentsen <tlb@rapanden.dk> 
 
 =head1 COPYRIGHT
 
-Copyright(C) 2005-2007 Troels Liebe Bentsen
+Copyright(C) 2005-2009 Troels Liebe Bentsen
 
 Copyright(C) 2005-2007 Jonas Jensen
 
