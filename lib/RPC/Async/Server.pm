@@ -172,14 +172,22 @@ sub return {
     push(@{$self->{waiting}}, [@$caller, 'result', @args])
 }
 
-=head2 C<die($caller, $str)>
-TODO: Move to main documentaion about exception handling
+=head2 C<error($caller, $str)>
 
 Set the $@ in the scope of the client callback and in essence acts as a
 exception on the client side, can be called instead of C<return()> and only
 once. 
 
 =cut
+
+sub error {
+    my ($self, $caller, $str) = @_;
+    
+    croak "caller is not an array ref" if ref $caller ne 'ARRAY';
+    
+    push(@{$self->{waiting}}, [@$caller, 'die', $str]);
+}
+
 
 =head2 C<io($event)>
 
