@@ -1,5 +1,6 @@
 use strict;
 use warnings;
+use Carp;
 
 use Test::More tests => 2;
 use RPC::Async::Client;
@@ -19,15 +20,32 @@ my $rpc = RPC::Async::Client->new(
                 "The server dies with an error as it should");
         }
         print "$type($fh)\: '$str'";
+    },
+    Exceptions => 1,
+);
+
+$rpc->connect("perl2://./test-server.pl",
+);
+
+$rpc->exception(
+    type => 'croak', 
+    side => "CLIENT", 
+    msg => 'Croak on client side', 
+    sub {
+        is($@, "Croak on client side at t/07-croak.t in main::exception() line 38\n", 
+            "We returned and got timeout as expected");
     }
 );
 
-$rpc->connect("perl2://./test-server.pl");
-
-$rpc->set_options('die', Timeout => 1);
-$rpc->die(sleep => 2, sub {
-    is($@, "timeout", "We returned and got timeout as expected");
-});
+$rpc->exception(
+    type => 'die', 
+    side => "CLIENT", 
+    msg => 'Die on client side', 
+    sub {
+        is($@, "Die on client side at t/07-croak.t in main::exception() line 48\n", 
+            "We returned and got timeout as expected");
+    }
+);
 
 while (my $event = $mux->mux($rpc->timeout())) {
     next if $rpc->io($event);

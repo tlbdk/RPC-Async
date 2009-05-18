@@ -1,6 +1,7 @@
 #!/usr/bin/env perl -c
 use strict;
 use warnings;
+use Carp;
 
 use lib "lib";
 
@@ -82,6 +83,21 @@ sub rpc_callback {
 
 sub rpc_no_return {
     # DO nothing
+}
+
+sub rpc_exception {
+    my ($caller, %args) = @_;
+    
+    if($args{type} eq 'croak') {
+        print "croak($args{side}): $args{msg}\n";
+        croak "$args{side}: $args{msg}";
+
+    } elsif($args{type} eq 'die') {
+        print "die($args{side}): $args{msg}\n";
+        die "$args{side}: $args{msg}";
+    }
+
+    $rpc->return();
 }
 
 sub rpc_die {

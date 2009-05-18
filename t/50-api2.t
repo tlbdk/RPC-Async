@@ -51,7 +51,8 @@ foreach(1 .. 1) {
 
 # Try to call an invalid method
 $id = $rpc->no_such_method(sub {
-    is($@, "No sub 'no_such_method' in package 'main'", "Invalid method call gives error");
+    cmp_ok($@, "=~", "No sub 'no_such_method' in package main", 
+        "Invalid method call gives error");
 });
 
 is($id, 1, "We got the first ID 1");

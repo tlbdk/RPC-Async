@@ -5,8 +5,6 @@ use Test::More tests => 3;
 use RPC::Async::Client;
 use IO::EventMux;
 
-plan skip_all => "Currently a developer-only test" if !$ENV{TEST_AUTHOR};
-
 my $mux = IO::EventMux->new();
 my $rpc = RPC::Async::Client->new( 
     Mux => $mux,
@@ -25,6 +23,7 @@ is_deeply($rpc->dump_requests(), { $id1 => {
     callback => $callback,
     procedure => 'simple',
     args => [arg1 => 1],
+    caller => ['main', 't/80-dump.t', 21],
 }}, "dump_requests returned a structure we expected");
 
 while (my $event = $mux->mux($rpc->timeout())) {

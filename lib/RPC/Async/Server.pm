@@ -173,23 +173,13 @@ sub return {
 }
 
 =head2 C<die($caller, $str)>
+TODO: Move to main documentaion about exception handling
 
 Set the $@ in the scope of the client callback and in essence acts as a
 exception on the client side, can be called instead of C<return()> and only
 once. 
 
 =cut
-
-sub die {
-    my ($self, $caller, @args) = @_;
-    
-    croak "caller is not an array ref" if ref $caller ne 'ARRAY';
-
-    push(@{$self->{waiting}}, [@$caller, 'die', @args])
-}
-
-
-
 
 =head2 C<io($event)>
 
@@ -224,7 +214,7 @@ sub io {
             # DeSerialize and call callbacks 
             eval { $self->_append($event->{fh}, $event->{data}); };
             if($@) {
-                if($@ =~ /^RPC:/) {
+                if(ref $@ eq '' and $@ =~ /^RPC:/) {
                     print "killed connection because of '$@\'n";
                     $self->_close($fh); # Close client and drop outstanding requests
                     $mux->kill($fh);
@@ -305,7 +295,15 @@ sub _append {
 
         if(exists $package->{"rpc_$procedure"}) {
             my $sub = *{$package->{"rpc_$procedure"}}{CODE};
-            $sub->($caller, @{decode_args($self, $fh, \@args)});
+            eval { $sub->($caller, @{decode_args($self, $fh, \@args)}); };
+            if($@) {
+                if((ref $@ eq '') and ($@ =~ /^CLIENT:\s*(.*?)\.?\n?$/s)) {
+                    push(@{$self->{waiting}}, [@$caller, 'die', $1]);
+                
+                } else {
+                    CORE::die($@);
+                }
+            }
        
         # TODO : Make this more flexible so other ways of getting reflection
         # information is possible
@@ -330,8 +328,10 @@ sub _append {
             $self->return($caller, %procedures);
 
         } else {
-            $self->die($caller, 
-                "No sub '$procedure' in package '$self->{package}'");
+            # Set $@ in remote client callback
+            push(@{$self->{waiting}}, [@$caller, 'die', 
+                "No sub '$procedure' in package $self->{package}"]
+            );
         }
     }
 }

@@ -81,7 +81,9 @@ sub AUTOLOAD {
     croak "Call to local non-existing function $procedure without self : $self"
         if !blessed($self);
 
-    return $self->call($procedure, @_);
+    # Same as $self->call($procedure, @_) but caller now returns a level higher
+    @_ = ($self, $procedure, @_);
+    goto &call;
 }
 
 # Define empty DESTROY() so it is not cought in the AUTOLOAD
@@ -243,7 +245,7 @@ sub new {
         
         pids => {}, # { $fh => $pid, ... }
         waitpid_ids => {}, # { $fh => $id }
-        
+    
     }, $class;
 
     unlink "client.tmp";
@@ -279,12 +281,13 @@ sub call {
     
     croak "Called RPC function $procedure without callback" 
         if ref $callback ne 'CODE';
-    
+
     my $id = $self->_unique_id;
     $self->{requests}{$id} = { 
         callback => $callback, 
         procedure => $procedure,
-        args => encode_args($self, \@args), 
+        args => encode_args($self, \@args),
+        caller => [ caller() ],
     };
 
     push(@{$self->{waiting}}, $id);
@@ -346,6 +349,7 @@ sub timeout {
         }
     }
 
+    #print Dumper($self->{requests});
     #print Dumper($timeouts, $timeout);
     #print("timeout(".time()."): ".(defined $timeout ? $timeout : 'undef')."\n");
 
@@ -480,11 +484,16 @@ sub io {
             eval { $self->_append($fh, $data); };
             # TODO: Check for RPC: call to limit 
             if($@) {
-                print Dumper($@);
-                print "killed connection because of '$@'\n";
-                # Try to reconnect if this was unexpected
-                $mux->kill($fh);
-                $self->_try_reconnect($fh, 'read');
+                if(ref $@ eq '' and $@ =~ /^RPC:/) {
+                    print Dumper($@);
+                    print "killed connection because of '$@'\n";
+                    # Try to reconnect if this was unexpected
+                    $mux->kill($fh);
+                    $self->_try_reconnect($fh, 'read');
+                } else {
+                    # Rethrow exception
+                    CORE::die $@;
+                }
             }
 
         } elsif($type eq 'closing' or $type eq 'closed') {
@@ -613,9 +622,9 @@ sub dump_coderefs {
 
 sub _append {
     my ($self, $fh, $data) = @_;
-    croak "fh is undefined" if !defined $fh;
-    croak "fh $fh not managed by RPC::Client" if !exists $self->{fhs}{$fh};
-    croak "data is undefined" if !defined $data;
+    croak "RPC: fh is undefined" if !defined $fh;
+    croak "RPC: fh $fh not managed by RPC::Client" if !exists $self->{fhs}{$fh};
+    croak "RPC: data is undefined" if !defined $data;
     
     # DEBUG CODE
     #use File::Slurp;
@@ -625,7 +634,6 @@ sub _append {
     
     #write_file('client-buffer.tmp', { binmode => ':raw' }, $self->{inputs}{$fh});
         
-    my @ids;
     while(length($self->{inputs}{$fh}) > 0) {
         my $packet = _deserialize(\$self->{inputs}{$fh},
             $self->{max_request_size});
@@ -635,20 +643,28 @@ sub _append {
         
         my ($id, $type, @args) = @{$packet};
     
-        croak "Not a valid id" if !(defined $id or $id =~ /^\d+$/);
+        croak "RPC: Not a valid id" if !(defined $id or $id =~ /^\d+$/);
        
         #print Dumper({id => $id, type => $type, args => \@args});
 
         if (my $request = delete $self->{requests}{$id}) {
-            push(@ids, $id);
-            
             $self->{outstanding}--;
 
             # Save exception state
             my $old_exception = $@;
             
             # We got an exception
-            if($type eq 'die') { $@ = shift @args; }
+            if($type eq 'die') { 
+                $@ = shift @args;
+                $@ =~ s/^(.*) at .*? line \d+/$1/s;
+                
+                # Get orignal rpc call caller information
+                my ($package, $file, $line) = @{$request->{caller}};
+                my $procedure = $request->{procedure};
+
+                $@ = "$@ at $file in $package\::$procedure() line $line\n";
+            }
+            
             $request->{callback}->(@args);
             
             # Restore exception state
@@ -667,7 +683,8 @@ sub _append {
             warn "Spurious reply to id $id\n" if $DEBUG;
         }
     }
-    return @ids;
+
+    return;
 }
 
 sub _data {
@@ -681,8 +698,7 @@ sub _data {
     return if $limit > 0 and $self->{outstanding} >= $limit; 
 
     if(my $id = shift @{$self->{waiting}}) {
-        my $request = $self->{requests}{$id} 
-            or die "Could not find id: $id";
+        my $request = $self->{requests}{$id} or next;
 
         # TODO: Check in key_queue if we have a limit_key on the request that
         # match and we can queue a new item from key_queue on @waiting.
@@ -840,6 +856,7 @@ sub _close {
     my($self, $fh) = @_;
 
     foreach my $id (keys %{$self->{requests}}) {
+        next if !exists $self->{requests}{$id}{fh}; # Skip internal and queued requests
         if($self->{requests}{$id}{fh} eq $fh) {
             delete $self->{requests}{$id}{fh}; 
             push(@{$self->{waiting}}, $id);
@@ -848,6 +865,7 @@ sub _close {
             @{$self->{rrs}} = grep { $_ ne $fh } @{$self->{rrs}};
         }
     }
+
     delete $self->{fhs}{$fh};
     delete $self->{inputs}{$fh};
     delete $self->{connect_args}{$fh};
