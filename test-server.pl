@@ -32,9 +32,10 @@ foreach my $fh (url_clients($rpc)) {
     $rpc->add($fh);
 }
 
-while (my $event = $mux->mux()) {
+while (my $event = $mux->mux($rpc->timeout())) {
     next if $rpc->io($event);
-    print "srv type($event->{fh}): $event->{type}\n" if $DEBUG;
+    my $fh = ($event->{fh} or '');
+    print "srv type($fh): $event->{type}\n" if $DEBUG;
 }
 
 my $sleep;
@@ -43,6 +44,13 @@ sleep $sleep if $sleep;
 
 print "All clients quit, so shutting down\n" if $INFO;
 
+sub rpc_retry {
+    my ($caller, $timeout) = @_;
+    # Schedule retry in $timeout seconds
+    $rpc->retry($caller, ($timeout or 1), sub {
+        $rpc->return($caller, "We returned on retry");
+    });
+}
 
 # Make it difficult to kill the server and keep stdout and stderr open with
 # sleep after shutdown

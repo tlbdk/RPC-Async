@@ -76,7 +76,7 @@ client sends invalid data, throw an exception to disconnect him.
 =cut
 
 use IO::EventMux;
-use RPC::Async::Util qw(expand decode_args);
+use RPC::Async::Util qw(expand decode_args queue_timeout);
 use RPC::Async::Coderef;
 
 =head2 C<new([%args])>
@@ -139,6 +139,8 @@ sub new {
         package => $args{Package},
         mux => $args{Mux},
         fhs => {},
+        timeouts => [], # [[time + $timeout, $id], ...]
+        retries => {}, # { [$fh, $id] => $callback }
         max_request_size => defined $args{MaxRequestSize} ?
             $args{MaxRequestSize} : 10 * 1024 * 1024, # 10MB
     }, $class;
@@ -170,6 +172,81 @@ sub return {
 
     # TODO: Replace 'type' with CONSTANTS
     push(@{$self->{waiting}}, [@$caller, 'result', @args])
+}
+
+=head2 C<retry($caller, $timeout, $callback)>
+
+Helper function to make it easier to do some timeout and retry handling on the
+server. This can be useful when doing network IO and other cases where server
+generated requests might get lost and needs to be retried. With C<retry()> you
+can schedule a retry of a operation in $timeout seconds.
+
+  # Send initial packet
+  $mux->sendto($fh, $addr, $packet);
+
+  # Resend the packet again after 3 seconds 
+  $rpc->retry($caller, 3, sub {
+    $mux->sendto($fh, $addr, $packet);
+  });
+
+All schedule retry functions are delete on C<return()> to $caller.
+
+=cut
+
+sub retry {
+    my ($self, $caller, $timeout, $callback) = @_;
+   
+    croak "caller is not an array ref" if ref $caller ne 'ARRAY';
+    croak "callback is a coderef" if ref $callback ne 'CODE';
+
+    push(@{$self->{retries}{$caller}}, $callback);
+    queue_timeout($self->{timeouts}, $timeout + time, $caller);
+}
+
+
+
+=head2 C<timeout()>
+
+Returns the next timeout in seconds.
+
+NOTE: This function should always be called as it also does the data sending.
+
+=cut
+
+sub timeout {
+    my ($self) = @_;
+    my $timeouts = $self->{timeouts};
+    
+    # Handle timeouts
+    my $time = time;
+    my $timeout = undef;
+    while(my $item = shift @{$timeouts}) {
+        next if !exists $self->{retries}{$item->[1]};
+        
+        if($item->[0] <= $time) {
+            while(my $callback = shift @{$self->{retries}{$item->[1]}}) {
+                $callback->(); 
+            }
+        
+        } else {
+            $timeout = $item->[0] - $time;
+            # No more items timed out, put back on queue.
+            unshift(@{$self->{timeouts}}, $item);
+            last;
+        }
+    };
+
+    # Send outstanding rpc packets
+    my $mux = $self->{mux};
+    while (my ($fh, $data) = $self->_data()) {
+        print "Sending packed data: $fh\n" if $TRACE;
+        $mux->send($fh, $data);
+    }
+
+    #use Data::Dumper; print Dumper($timeouts);
+    #print("timeout(".time()."): ".(defined $timeout ? $timeout : 'undef')."\n");
+    
+    return $timeout;
 }
 
 =head2 C<error($caller, $str)>
@@ -212,6 +289,7 @@ sub io {
     my $mux = $self->{mux};
     my($type, $fh, $data) = ($event->{type}, $event->{fh}, $event->{data});
 
+    # Only do something on events that have a filehandle
     return if !defined $fh;
     #use Data::Dumper; print Dumper($event);
 
@@ -240,15 +318,6 @@ sub io {
             print Dumper($event);
             $self->_close($fh); 
             $mux->kill($fh);
-        }
-
-        # Send outstanding rpc packets
-        while (my ($fh, $data) = $self->_data()) {
-            print "Sending packed data: $fh\n" if $TRACE;
-            # DEBUG CODE
-            #use File::Slurp;
-            #write_file('server.tmp', { binmode => ':raw', append => 1 }, $data);
-            $mux->send($fh, $data);
         }
 
         return 1;
@@ -351,7 +420,10 @@ sub _data {
 
     if(my $response = shift @{$self->{waiting}}) {
         my($fh, $id, $type, @args) = @{$response};
-        
+      
+        # Skip this response if nobody wants it
+        next if !exists $self->{fhs}{$fh};
+
         # Serialize data
         my $data = _serialize([$id, $type, @args]);
 

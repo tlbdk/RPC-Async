@@ -63,7 +63,7 @@ further documented.
 
 use Carp;
 use Socket;
-use RPC::Async::Util qw(encode_args);
+use RPC::Async::Util qw(encode_args queue_timeout);
 use RPC::Async::Coderef;
 use RPC::Async::Regexp;
 use RPC::Async::URL;
@@ -719,7 +719,7 @@ sub _data {
         $timeout = defined $timeout ? $timeout : $self->{default_timeout};
         
         # Add id to timeout queue with now time + $timeout
-        $self->_queue_timeout(time + $timeout, $id) if $timeout;
+        queue_timeout($self->{timeouts}, time + $timeout, $id) if $timeout;
 
         # Increment outstanding requests counter
         $self->{outstanding}++;
@@ -737,26 +737,6 @@ sub _unique_id {
     return $self->{serial} &= 0x7FffFFff;
 }
 
-sub _queue_timeout {
-    my ($self, $timeout, $id) = @_;
-    my $timeouts = $self->{timeouts};
-    if(@{$timeouts} == 0 or $timeout >= $timeouts->[-1][0]) {
-        # The queue is empty or item belongs in the end of the queue
-        push(@{$timeouts}, [$timeout, $id]);
-    } else {
-        # Try to insert the item from the back
-        for(my $i=int(@{$timeouts})-1; $i >= 0; $i--) {
-            if($timeout >= $timeouts->[$i][0]) {
-                # The item fits somewhere in the middle
-                splice(@{$timeouts}, $i+1, 0, [$timeout, $id]);
-                last;
-            } elsif ($i == 0) {
-                # The item was small than anything else
-                unshift (@{$timeouts}, [$timeout, $id]);
-            }
-        }
-    }
-}
 
 sub _waitpid_timeout {
     my($self, $fh, $timeout, $signal, $last_signal) = @_;
@@ -775,7 +755,7 @@ sub _waitpid_timeout {
         },
         procedure => '_waitpid',
     };
-    $self->_queue_timeout(time + $timeout, $id);
+    queue_timeout($self->{timeouts}, time + $timeout, $id);
     push(@{$self->{waitpid_ids}{$fh}}, $id);
     print "waitpid id: $id\n";
 }
@@ -812,7 +792,7 @@ sub _kill_timeout {
         },
         procedure => '_kill',
     };
-    $self->_queue_timeout(time + $timeout, $id);
+    queue_timeout($self->{timeouts}, time + $timeout, $id);
     push(@{$self->{waitpid_ids}{$fh}}, $id);
     print "kill id: $id\n";
 }

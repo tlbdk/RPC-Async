@@ -16,7 +16,7 @@ use Class::ISA;
 use Storable qw(nfreeze thaw);
 use Data::Dumper;
 
-our @EXPORT_OK = qw(expand encode_args decode_args);
+our @EXPORT_OK = qw(queue_timeout expand encode_args decode_args);
 
 =head1 METHODS
 
@@ -82,6 +82,34 @@ TODO: Write more
 sub output {
     my ($fh, $type, $data) = @_;
     print uc($type)."($fh): $data";
+}
+
+
+=head2 C<queue_timeout($timeouts, $timeout, $id)>
+
+TODO: Write more
+
+=cut
+
+sub queue_timeout {
+    my ($timeouts, $timeout, $id) = @_;
+    
+    if(@{$timeouts} == 0 or $timeout >= $timeouts->[-1][0]) {
+        # The queue is empty or item belongs in the end of the queue
+        push(@{$timeouts}, [$timeout, $id]);
+    } else {
+        # Try to insert the item from the back
+        for(my $i=int(@{$timeouts})-1; $i >= 0; $i--) {
+            if($timeout >= $timeouts->[$i][0]) {
+                # The item fits somewhere in the middle
+                splice(@{$timeouts}, $i+1, 0, [$timeout, $id]);
+                last;
+            } elsif ($i == 0) {
+                # The item was small than anything else
+                unshift (@{$timeouts}, [$timeout, $id]);
+            }
+        }
+    }
 }
 
 =head2 C<encode_args($self, \$args)>
