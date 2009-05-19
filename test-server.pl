@@ -19,7 +19,16 @@ my $TRACE = 1;
 my $INFO = 1;
 
 my $mux = IO::EventMux->new;
-my $rpc = RPC::Async::Server->new( Mux => $mux );
+my $rpc = RPC::Async::Server->new( 
+    Mux => $mux,
+    Timeout => 0,
+    DelayedReturn => 1,
+);
+
+# FIXME: Implement
+$rpc->set_options("rpc_timeout", Timeout => 1); # Return a timeout after 1 second
+# FIXME: Implement
+$rpc->set_options("rpc_nondelayed", DelayedReturn => 0); # Make normal return, return to client
 
 unlink "server.tmp";
 
@@ -43,6 +52,15 @@ print "sleeping\n" if $sleep;
 sleep $sleep if $sleep;
 
 print "All clients quit, so shutting down\n" if $INFO;
+
+sub rpc_timeout {
+    my ($caller) = @_;
+}
+
+sub rpc_nondelayed {
+    my ($caller) = @_;
+    return "Now this is what caller gets";
+}
 
 sub rpc_retry {
     my ($caller, $timeout) = @_;

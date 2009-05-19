@@ -378,7 +378,7 @@ sub set_options {
     
     if(exists $args{Timeout}) {
         my $timeout = $args{Timeout};
-        if($timeout >= 0) {
+        if(defined $timeout and $timeout >= 0) {
             $self->{procedure_timeouts}{$procedure} = $timeout;
         } else {
             delete $self->{procedure_timeouts}{$procedure}

@@ -140,12 +140,49 @@ sub new {
         mux => $args{Mux},
         fhs => {},
         timeouts => [], # [[time + $timeout, $id], ...]
+        
+        default_timeout => $args{Timeout} ? $args{Timeout} : 0,
+        procedure_timeouts => {}, # { 'procedure_name' => timeout }  
+        
+        procedure_return => {}, # { 'procedure_name' => 1 }  
+
         retries => {}, # { [$fh, $id] => $callback }
+        
         max_request_size => defined $args{MaxRequestSize} ?
             $args{MaxRequestSize} : 10 * 1024 * 1024, # 10MB
     }, $class;
 
     return $self;
+}
+
+=head2 C<set_options($caller, %options)>
+
+TODO: Write
+
+=cut
+
+sub set_options {
+    my ($self, $procedure, %args) = @_;
+    
+    if(exists $args{Timeout}) {
+        my $timeout = $args{Timeout};
+        if(defined $timeout and $timeout >= 0) {
+            $self->{procedure_timeouts}{$procedure} = $timeout;
+        } else {
+            delete $self->{procedure_timeouts}{$procedure}
+        }
+    
+    } elsif(exists $args{DelayedReturn}) {
+        my $delayed = $args{DelayedReturn};
+        if(defined $delayed) {
+            $self->{procedure_return}{$procedure} = $delayed;
+        } else {
+            delete $self->{procedure_return}{$procedure}
+        }
+
+    } else {
+        croak "No known options set";
+    }
 }
 
 =head2 C<add($fh)>
