@@ -3,6 +3,8 @@ use strict;
 use warnings;
 use Carp;
 
+# TODO: Validate that we catch exceptions when ever we do a callback
+
 our $VERSION = '2.00';
 
 my $DEBUG = 1;
@@ -146,7 +148,7 @@ sub new {
         
         procedure_return => {}, # { 'procedure_name' => 1 }  
 
-        retries => {}, # { [$fh, $id] => $callback }
+        retries => {}, # { $caller[$fh, $id] => $callback }
         
         max_request_size => defined $args{MaxRequestSize} ?
             $args{MaxRequestSize} : 10 * 1024 * 1024, # 10MB
@@ -262,7 +264,11 @@ sub timeout {
         
         if($item->[0] <= $time) {
             while(my $callback = shift @{$self->{retries}{$item->[1]}}) {
-                $callback->(); 
+                eval { $callback->(); };
+                if((ref $@ eq '') and ($@ =~ /^CLIENT:\s*(.*?)\.?\n?$/s)) {
+                    print "Send croak to client\n";
+                    push(@{$self->{waiting}}, [@{$item->[1]}, 'die', $1]);
+                }
             }
         
         } else {
@@ -331,7 +337,7 @@ sub io {
     #use Data::Dumper; print Dumper($event);
 
     if(exists $self->{fhs}{$fh}) {
-        print "do_io: $type\n" if $TRACE;
+        print "server io: $type\n" if $TRACE;
 
         if($type eq 'read') {
             # DeSerialize and call callbacks 
@@ -457,9 +463,10 @@ sub _data {
 
     if(my $response = shift @{$self->{waiting}}) {
         my($fh, $id, $type, @args) = @{$response};
-      
+        
+        print "$fh : $id, $type\n";
         # Skip this response if nobody wants it
-        next if !exists $self->{fhs}{$fh};
+        return if !exists $self->{fhs}{$fh};
 
         # Serialize data
         my $data = _serialize([$id, $type, @args]);

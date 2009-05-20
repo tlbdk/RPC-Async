@@ -62,6 +62,14 @@ sub rpc_nondelayed {
     return "Now this is what caller gets";
 }
 
+sub rpc_retry_croak {
+    my ($caller, $timeout) = @_;
+    # Schedule retry in $timeout seconds
+    $rpc->retry($caller, ($timeout or 1), sub {
+        croak("CLIENT: We returned on retry");
+    });
+}
+
 sub rpc_retry {
     my ($caller, $timeout) = @_;
     # Schedule retry in $timeout seconds

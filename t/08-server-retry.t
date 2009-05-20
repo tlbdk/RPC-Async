@@ -2,7 +2,7 @@ use strict;
 use warnings;
 use Carp;
 
-use Test::More tests => 3;
+use Test::More tests => 4;
 use RPC::Async::Client;
 use RPC::Async::URL;
 use RPC::Async::Util qw(encode_args);
@@ -29,6 +29,10 @@ $rpc->connect("perl2://./test-server.pl");
 $rpc->retry(sub {
     ok(!$@, "No exception was set");
     is($_[0], 'We returned on retry', "The retry returned without timeout");
+});
+
+$rpc->retry_croak(sub {
+    cmp_ok($@, '=~', 'We returned on retry', 'Got croak from server');
 });
 
 while (my $event = $mux->mux($rpc->timeout())) {

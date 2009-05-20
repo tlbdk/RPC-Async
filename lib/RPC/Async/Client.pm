@@ -476,7 +476,7 @@ sub io {
     
     # Check if this fh is handled by RPC
     if(exists $self->{fhs}{$fh}) {
-        print "do_io: $type\n" if $TRACE;
+        print "client io: $type\n" if $TRACE;
         #print "fh: $fh\n" if $fh;
 
         if($type eq 'read') {
@@ -640,13 +640,13 @@ sub _append {
         
         # Drop out of loop if we need more data 
         last if !$packet; 
-        
+
         my ($id, $type, @args) = @{$packet};
     
         croak "RPC: Not a valid id" if !(defined $id or $id =~ /^\d+$/);
        
         #print Dumper({id => $id, type => $type, args => \@args});
-
+        
         if (my $request = delete $self->{requests}{$id}) {
             $self->{outstanding}--;
 
@@ -656,13 +656,14 @@ sub _append {
             # We got an exception
             if($type eq 'die') { 
                 $@ = shift @args;
-                $@ =~ s/^(.*) at .*? line \d+/$1/s;
-                
-                # Get orignal rpc call caller information
-                my ($package, $file, $line) = @{$request->{caller}};
-                my $procedure = $request->{procedure};
+                if($@ =~ s/^(.*) at .*? line \d+/$1/s) { 
+                    # Get orignal rpc call caller information
+                    my ($package, $file, $line) = @{$request->{caller}};
+                    my $procedure = $request->{procedure};
 
-                $@ = "$@ at $file in $package\::$procedure() line $line\n";
+                    $@ = "$@ at $file in ".__PACKAGE__
+                        ."->$procedure() line $line\n";
+                }
             }
             
             $request->{callback}->(@args);
@@ -827,7 +828,14 @@ sub _try_reconnect {
             print "reconnect($type): $connect_args->[0]\n";
             $self->connect(@{$connect_args});
         } else {
-            croak "no more connect retries";
+            foreach my $id (keys %{$self->{requests}}) {
+                my $request = delete $self->{requests}{$id};
+                
+                $@ = 'no more connect retries';
+                $request->{callback}->();
+            }
+            # TODO: Make croaking optional as this is a valid excuse for giving up
+            #croak "RPC: no more connect retries";
         }
     }
 }

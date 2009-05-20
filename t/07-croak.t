@@ -32,7 +32,7 @@ $rpc->exception(
     side => "CLIENT", 
     msg => 'Croak on client side', 
     sub {
-        is($@, "Croak on client side at t/07-croak.t in main::exception() line 38\n", 
+        is($@, "Croak on client side at t/07-croak.t in RPC::Async::Client->exception() line 38\n", 
             "We returned and got timeout as expected");
     }
 );
@@ -42,7 +42,7 @@ $rpc->exception(
     side => "CLIENT", 
     msg => 'Die on client side', 
     sub {
-        is($@, "Die on client side at t/07-croak.t in main::exception() line 48\n", 
+        is($@, "Die on client side at t/07-croak.t in RPC::Async::Client->exception() line 48\n", 
             "We returned and got timeout as expected");
     }
 );
