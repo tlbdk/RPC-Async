@@ -63,7 +63,7 @@ further documented.
 
 use Carp;
 use Socket;
-use RPC::Async::Util qw(encode_args queue_timeout);
+use RPC::Async::Util qw(encode_args queue_timeout unique_id);
 use RPC::Async::Coderef;
 use RPC::Async::Regexp;
 use RPC::Async::URL;
@@ -282,7 +282,7 @@ sub call {
     croak "Called RPC function $procedure without callback" 
         if ref $callback ne 'CODE';
 
-    my $id = $self->_unique_id;
+    my $id = unique_id(\$self->{serial});
     $self->{requests}{$id} = { 
         callback => $callback, 
         procedure => $procedure,
@@ -731,14 +731,6 @@ sub _data {
     return;
 }
 
-sub _unique_id {
-    my ($self) = @_;
-
-    $self->{serial}++;
-    return $self->{serial} &= 0x7FffFFff;
-}
-
-
 sub _waitpid_timeout {
     my($self, $fh, $timeout, $signal, $last_signal) = @_;
     my $pid = $self->{pids}{$fh} or return;
@@ -749,7 +741,7 @@ sub _waitpid_timeout {
     }
 
     # Queue timeout to collect pid 
-    my $id = $self->_unique_id;
+    my $id  = unique_id(\$self->{serial});
     $self->{requests}{$id} = { 
         callback => sub {
             $self->_waitpid($fh, $signal, $last_signal);
@@ -786,7 +778,7 @@ sub _kill_timeout {
     my $pid = $self->{pids}{$fh} or return;
  
     # Queue timeout to collect pid 
-    my $id = $self->_unique_id;
+    my $id = unique_id(\$self->{serial});
     $self->{requests}{$id} = { 
         callback => sub {
             $self->_kill($fh, $signal, $last_signal);

@@ -25,10 +25,9 @@ my $rpc = RPC::Async::Server->new(
     DelayedReturn => 1,
 );
 
+$rpc->set_options("server_timeout", Timeout => 1); # Return a timeout after 1 second
 # FIXME: Implement
-$rpc->set_options("rpc_timeout", Timeout => 1); # Return a timeout after 1 second
-# FIXME: Implement
-$rpc->set_options("rpc_nondelayed", DelayedReturn => 0); # Make normal return, return to client
+$rpc->set_options("non_delayed", DelayedReturn => 0); # Make normal return, return to client
 
 unlink "server.tmp";
 
@@ -53,11 +52,11 @@ sleep $sleep if $sleep;
 
 print "All clients quit, so shutting down\n" if $INFO;
 
-sub rpc_timeout {
+sub rpc_server_timeout {
     my ($caller) = @_;
 }
 
-sub rpc_nondelayed {
+sub rpc_non_delayed {
     my ($caller) = @_;
     return "Now this is what caller gets";
 }

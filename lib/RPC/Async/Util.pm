@@ -16,7 +16,7 @@ use Class::ISA;
 use Storable qw(nfreeze thaw);
 use Data::Dumper;
 
-our @EXPORT_OK = qw(queue_timeout expand encode_args decode_args);
+our @EXPORT_OK = qw(queue_timeout expand encode_args decode_args unique_id);
 
 =head1 METHODS
 
@@ -73,6 +73,18 @@ sub deserialize_storable {
     return;
 }
 
+=head2 C<unique_id(\$serial))>
+
+TODO: Write more
+
+=cut
+
+sub unique_id {
+    ${$_[0]}++;
+    return ${$_[0]} &= 0x7FffFFff;
+}
+
+
 =head2 C<output($fh, $type, $data)>
 
 TODO: Write more
@@ -85,28 +97,28 @@ sub output {
 }
 
 
-=head2 C<queue_timeout($timeouts, $timeout, $id)>
+=head2 C<queue_timeout($timeouts, $timeout, @info)>
 
 TODO: Write more
 
 =cut
 
 sub queue_timeout {
-    my ($timeouts, $timeout, $id) = @_;
+    my ($timeouts, $timeout, @info) = @_;
     
     if(@{$timeouts} == 0 or $timeout >= $timeouts->[-1][0]) {
         # The queue is empty or item belongs in the end of the queue
-        push(@{$timeouts}, [$timeout, $id]);
+        push(@{$timeouts}, [$timeout, @info]);
     } else {
         # Try to insert the item from the back
         for(my $i=int(@{$timeouts})-1; $i >= 0; $i--) {
             if($timeout >= $timeouts->[$i][0]) {
                 # The item fits somewhere in the middle
-                splice(@{$timeouts}, $i+1, 0, [$timeout, $id]);
+                splice(@{$timeouts}, $i+1, 0, [$timeout, @info]);
                 last;
             } elsif ($i == 0) {
                 # The item was small than anything else
-                unshift (@{$timeouts}, [$timeout, $id]);
+                unshift (@{$timeouts}, [$timeout, @info]);
             }
         }
     }
@@ -133,7 +145,7 @@ sub encode_args {
                 $$obj = RPC::Async::Regexp->new($$obj);
             
             } elsif ($type eq "CODE") {
-                my $id = $self->_unique_id;
+                my $id = unique_id(\$self->{serial});
                 $self->{coderefs}{$id} = $$obj;
                 $$obj = RPC::Async::Coderef->new($id);
             

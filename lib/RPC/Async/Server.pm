@@ -78,7 +78,7 @@ client sends invalid data, throw an exception to disconnect him.
 =cut
 
 use IO::EventMux;
-use RPC::Async::Util qw(expand decode_args queue_timeout);
+use RPC::Async::Util qw(expand decode_args queue_timeout unique_id);
 use RPC::Async::Coderef;
 
 =head2 C<new([%args])>
@@ -115,14 +115,14 @@ The default value is 10MB.
 sub new {
     my ($class, %args) = @_;
 
-    *_serialize =\&RPC::Async::Util::serialize_storable;
-    *_deserialize = \&RPC::Async::Util::deserialize_storable;
-
     if($args{Serialize}) {
         croak "Argument Serialize is not a code ref" 
             if !ref $args{Serialize} eq 'CODE';
         
         *_serialize = $args{Serialize};
+
+    } else {
+        *_serialize =\&RPC::Async::Util::serialize_storable;
     }
 
     if($args{DeSerialize}) {
@@ -130,6 +130,9 @@ sub new {
             if !ref $args{DeSerialize} eq 'CODE';
 
         *_deserialize = $args{DeSerialize};
+    
+    } else {
+        *_deserialize = \&RPC::Async::Util::deserialize_storable;
     }
     
     if (!$args{Package}) {
@@ -140,16 +143,19 @@ sub new {
     my $self = bless {
         package => $args{Package},
         mux => $args{Mux},
-        fhs => {},
+        fhs => {}, # { $fh => 'data' }
+        serial => 0,
         timeouts => [], # [[time + $timeout, $id], ...]
         
         default_timeout => $args{Timeout} ? $args{Timeout} : 0,
         procedure_timeouts => {}, # { 'procedure_name' => timeout }  
-        
-        procedure_return => {}, # { 'procedure_name' => 1 }  
+   
+        callers => {}, # { $fh => { $client_id => [ $retry_id, ... ] } } 
+        retries => {}, #  { $id => { caller => $caller, callback => ... }
 
-        retries => {}, # { $caller[$fh, $id] => $callback }
-        
+        default_return => $args{DelayedReturn} ? $args{DelayedReturn} : 0,  # { 'procedure_name' => 0 }
+        procedure_returns => {}, # { 'procedure_name' => 1 }  
+
         max_request_size => defined $args{MaxRequestSize} ?
             $args{MaxRequestSize} : 10 * 1024 * 1024, # 10MB
     }, $class;
@@ -173,13 +179,13 @@ sub set_options {
         } else {
             delete $self->{procedure_timeouts}{$procedure}
         }
-    
+    # TODO: Implement 
     } elsif(exists $args{DelayedReturn}) {
         my $delayed = $args{DelayedReturn};
         if(defined $delayed) {
-            $self->{procedure_return}{$procedure} = $delayed;
+            $self->{procedure_returns}{$procedure} = $delayed;
         } else {
-            delete $self->{procedure_return}{$procedure}
+            delete $self->{procedure_returns}{$procedure}
         }
 
     } else {
@@ -210,7 +216,7 @@ sub return {
     croak "caller is not an array ref" if ref $caller ne 'ARRAY';
 
     # TODO: Replace 'type' with CONSTANTS
-    push(@{$self->{waiting}}, [@$caller, 'result', @args])
+    push(@{$self->{waiting}}, [@$caller, 'result', @args]);
 }
 
 =head2 C<retry($caller, $timeout, $callback)>
@@ -234,15 +240,20 @@ All schedule retry functions are delete on C<return()> to $caller.
 
 sub retry {
     my ($self, $caller, $timeout, $callback) = @_;
-   
+
+    print "Called retry on $caller for $timeout\n" if $TRACE;
+
     croak "caller is not an array ref" if ref $caller ne 'ARRAY';
     croak "callback is a coderef" if ref $callback ne 'CODE';
 
-    push(@{$self->{retries}{$caller}}, $callback);
-    queue_timeout($self->{timeouts}, $timeout + time, $caller);
+    my $id = unique_id(\$self->{serial});
+    $self->{retries}{$id} = [$caller, $callback];
+
+    queue_timeout($self->{timeouts}, $timeout + time, $id);
+    
+    my ($fh, $client_id) = @{$caller};
+    push(@{$self->{callers}{$fh}{$client_id}}, $id);
 }
-
-
 
 =head2 C<timeout()>
 
@@ -263,11 +274,15 @@ sub timeout {
         next if !exists $self->{retries}{$item->[1]};
         
         if($item->[0] <= $time) {
-            while(my $callback = shift @{$self->{retries}{$item->[1]}}) {
-                eval { $callback->(); };
-                if((ref $@ eq '') and ($@ =~ /^CLIENT:\s*(.*?)\.?\n?$/s)) {
-                    print "Send croak to client\n";
-                    push(@{$self->{waiting}}, [@{$item->[1]}, 'die', $1]);
+            if (my $retry = delete $self->{retries}{$item->[1]}) {
+                eval { $retry->[1]->($retry->[0]); };
+                if($@) {
+                    if(ref $@ eq '' and $@ =~ /^CLIENT:\s*(.*?)\.?\n?$/s) {
+                        print "Send croak to client\n" if $TRACE;
+                        $self->error($retry->[0], $1);
+                    } else {
+                        CORE::die($@);
+                    }
                 }
             }
         
@@ -286,8 +301,8 @@ sub timeout {
         $mux->send($fh, $data);
     }
 
-    #use Data::Dumper; print Dumper($timeouts);
-    #print("timeout(".time()."): ".(defined $timeout ? $timeout : 'undef')."\n");
+    #use Data::Dumper; print Dumper($timeouts, $self->{retries}, $self->{waiting});
+    print("timeout(".time()."): ".(defined $timeout ? $timeout : 'undef')."\n");
     
     return $timeout;
 }
@@ -302,7 +317,7 @@ once.
 
 sub error {
     my ($self, $caller, $str) = @_;
-    
+   
     croak "caller is not an array ref" if ref $caller ne 'ARRAY';
     
     push(@{$self->{waiting}}, [@$caller, 'die', $str]);
@@ -415,13 +430,28 @@ sub _append {
 
         if(exists $package->{"rpc_$procedure"}) {
             my $sub = *{$package->{"rpc_$procedure"}}{CODE};
+            
             eval { $sub->($caller, @{decode_args($self, $fh, \@args)}); };
             if($@) {
+                # Send our error back if this exceptions has CLIENT:
                 if((ref $@ eq '') and ($@ =~ /^CLIENT:\s*(.*?)\.?\n?$/s)) {
-                    push(@{$self->{waiting}}, [@$caller, 'die', $1]);
+                    $self->error($caller, $1);
                 
                 } else {
                     CORE::die($@);
+                }
+
+            } else {
+                # Use custom timeout if we have it else use default timeout
+                my $timeout = $self->{procedure_timeouts}{$procedure};
+                $timeout = defined $timeout ? $timeout : 
+                    $self->{default_timeout};
+
+                print "timeout is $timeout\n";
+                if($timeout) {
+                    $self->retry($caller, $timeout, sub {
+                        $self->error($_[0], "timeout-server"); 
+                    });
                 }
             }
        
@@ -449,9 +479,8 @@ sub _append {
 
         } else {
             # Set $@ in remote client callback
-            push(@{$self->{waiting}}, [@$caller, 'die', 
-                "No sub '$procedure' in package $self->{package}"]
-            );
+            $self->error($caller, 
+                "No sub '$procedure' in package $self->{package}");
         }
     }
 }
@@ -462,14 +491,20 @@ sub _data {
     return if !keys %{$self->{fhs}};
 
     if(my $response = shift @{$self->{waiting}}) {
-        my($fh, $id, $type, @args) = @{$response};
+        my($fh, $client_id, $type, @args) = @{$response};
         
-        print "$fh : $id, $type\n";
+        print "$fh : $client_id, $type\n" if $TRACE;
+        
         # Skip this response if nobody wants it
         return if !exists $self->{fhs}{$fh};
+        
+        # Delete all retries that are scheduled
+        while(my $id = shift @{$self->{callers}{$fh}{$client_id} or []}) {
+            delete $self->{retries}{$id};
+        }
 
         # Serialize data
-        my $data = _serialize([$id, $type, @args]);
+        my $data = _serialize([$client_id, $type, @args]);
 
         return ($fh, $data);
     }
@@ -480,6 +515,11 @@ sub _data {
 sub _close {
     my($self, $fh) = @_;
     delete $self->{fhs}{$fh};
+    if (my $client_ids = delete $self->{callers}{$fh}) {
+        foreach my $id (values %{$client_ids}) {
+            delete $self->{retries}{$id};
+        }
+    }
 }
 
 1;
