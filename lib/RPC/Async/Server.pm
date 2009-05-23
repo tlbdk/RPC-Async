@@ -302,7 +302,7 @@ sub timeout {
     }
 
     #use Data::Dumper; print Dumper($timeouts, $self->{retries}, $self->{waiting});
-    print("timeout(".time()."): ".(defined $timeout ? $timeout : 'undef')."\n");
+    #print("timeout(".time()."): ".(defined $timeout ? $timeout : 'undef')."\n");
     
     return $timeout;
 }
