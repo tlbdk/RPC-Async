@@ -411,7 +411,7 @@ sub connect {
         $mux->add($fh);
         $mux->add($stdout);
         $mux->add($stderr);
-        print "Added $fh, $stdout, $stderr\n";
+        print "Added $fh, OUT:$stdout, ERR:$stderr\n" if $TRACE;
         $self->{connect_args}{$fh} = [$url, @args];
     } else {
         croak "unknown url type : $url";
@@ -834,23 +834,23 @@ sub _try_reconnect {
 
 sub _close {
     my($self, $fh) = @_;
-
+    
+    # Remove all fh refrences from our requests
     foreach my $id (keys %{$self->{requests}}) {
         next if !exists $self->{requests}{$id}{fh}; # Skip internal and queued requests
         if($self->{requests}{$id}{fh} eq $fh) {
             delete $self->{requests}{$id}{fh}; 
             push(@{$self->{waiting}}, $id);
-            
-            # Remake the Round Robin array with out the closed $fh
-            @{$self->{rrs}} = grep { $_ ne $fh } @{$self->{rrs}};
         }
     }
+    
+    # Remake the Round Robin array without the closed $fh
+    @{$self->{rrs}} = grep { $_ ne $fh } @{$self->{rrs}};
 
+    # Cleanup
     delete $self->{fhs}{$fh};
     delete $self->{inputs}{$fh};
     delete $self->{connect_args}{$fh};
-    
-    # Set to kill after
 
     return $fh;
 }
