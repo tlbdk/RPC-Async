@@ -447,7 +447,6 @@ sub _append {
                 $timeout = defined $timeout ? $timeout : 
                     $self->{default_timeout};
 
-                print "timeout is $timeout\n";
                 if($timeout) {
                     $self->retry($caller, $timeout, sub {
                         $self->error($_[0], "timeout-server"); 
