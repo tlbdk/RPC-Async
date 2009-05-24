@@ -79,7 +79,6 @@ client sends invalid data, throw an exception to disconnect him.
 
 use IO::EventMux;
 use RPC::Async::Util qw(expand decode_args queue_timeout unique_id);
-use RPC::Async::Coderef;
 
 =head2 C<new([%args])>
 

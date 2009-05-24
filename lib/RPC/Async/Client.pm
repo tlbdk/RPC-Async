@@ -413,6 +413,8 @@ sub connect {
         $mux->add($stderr);
         print "Added $fh, OUT:$stdout, ERR:$stderr\n" if $TRACE;
         $self->{connect_args}{$fh} = [$url, @args];
+        
+        return $fh;
     } else {
         croak "unknown url type : $url";
     }

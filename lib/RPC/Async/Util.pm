@@ -207,8 +207,6 @@ sub decode_args {
                 $$obj->set_destroy(sub {
                     push(@{$self->{waiting}}, [$fh, $id, "destroy", @_])
                 });
-                
-                #push(@{$self->{coderefs}{$fh}}, $obj);
 
             } else {
                 croak "RPC: Unknown scalar type $type";
