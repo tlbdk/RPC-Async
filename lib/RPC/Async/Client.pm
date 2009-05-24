@@ -67,7 +67,6 @@ use RPC::Async::Util qw(encode_args queue_timeout unique_id);
 use RPC::Async::Coderef;
 use RPC::Async::Regexp;
 use RPC::Async::URL;
-use Data::Dumper;
 
 use Scalar::Util qw(blessed);
 
@@ -166,7 +165,9 @@ The default value is 10MB.
 =cut
 
 sub new {
+    croak "Odd number of elements in %args" if ((@_ - 1) % 2);
     my ($class, %args) = @_;
+
 
     if($args{Serialize}) {
         croak "Argument Serialize is not a code ref" 
@@ -282,6 +283,7 @@ sub call {
     croak "Called RPC function $procedure without callback" 
         if ref $callback ne 'CODE';
 
+    #use Data::Dumper; print Dumper(\@args);
     my $id = unique_id(\$self->{serial});
     $self->{requests}{$id} = { 
         callback => $callback, 

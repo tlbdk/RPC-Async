@@ -14,7 +14,7 @@ RPC::Async::Util - util module of the asynchronous RPC framework
 use base "Exporter";
 use Class::ISA;
 use Storable qw(nfreeze thaw);
-use Data::Dumper;
+use RPC::Async::Coderef;
 
 our @EXPORT_OK = qw(queue_timeout expand encode_args decode_args unique_id);
 
@@ -60,7 +60,7 @@ sub deserialize_storable {
                 my $char = substr(${$_[0]}, $i, 1);
                 #print sprintf("0x%02x(%03d)", ord($char), ord($char));
             }
-            print "\n";
+            #print "\n";
             die("RPC: Bad data in packet(".length(${$_[0]})."): $@");
 
         } elsif (ref $thawed eq "ARRAY" and @$thawed >= 1) {
@@ -154,12 +154,13 @@ sub encode_args {
                 croak "RPC: Cannot pass IO::Socket objects";
 
             } else {
+                #use Data::Dumper; print Dumper($obj);
                 croak "RPC: Unknown scalar type $type";
             }
         
         } elsif($type eq 'HASH') { # Hash
             push(@walk, map { (ref $_ eq 'HASH' or ref $_ eq 'ARRAY') 
-                    ? $obj->{$_} : \$obj->{$_} } keys %{$obj});
+                    ? $_ : \$_ } values %{$obj});
         
         } elsif($type eq 'ARRAY') { # Array
             push(@walk, map { (ref $_ eq 'HASH' or ref $_ eq 'ARRAY') 
@@ -172,6 +173,7 @@ sub encode_args {
         }
     }
     
+    #use Data::Dumper; print Dumper($args);
     return $args;
 }
 
@@ -196,9 +198,8 @@ sub decode_args {
                 $$obj = $$obj->build();
             
             } elsif (UNIVERSAL::isa($$obj, "RPC::Async::Coderef")) {
-                my $id = $$obj->id;
-                #use Data::Dumper; 
-                #print Dumper({ obj => $$obj });
+                #use Data::Dumper; print Dumper({ obj => $$obj });
+                my $id = $$obj->id();
             
                 # Setup the callbacks to push on the waiting queue
                 $$obj->set_call(sub {
@@ -207,6 +208,7 @@ sub decode_args {
                 $$obj->set_destroy(sub {
                     push(@{$self->{waiting}}, [$fh, $id, "destroy", @_])
                 });
+                
 
             } else {
                 croak "RPC: Unknown scalar type $type";
@@ -214,7 +216,7 @@ sub decode_args {
         
         } elsif($type eq 'HASH') { # Hash
             push(@walk, map { (ref $_ eq 'HASH' or ref $_ eq 'ARRAY') 
-                    ? $obj->{$_} : \$obj->{$_} } keys %{$obj});
+                    ? $_ : \$_ } values %{$obj});
         
         } elsif($type eq 'ARRAY') { # Array
             push(@walk, map { (ref $_ eq 'HASH' or ref $_ eq 'ARRAY') 
