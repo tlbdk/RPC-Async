@@ -399,7 +399,7 @@ sub connect {
     my($self, $url, @args) = @_;
     my $mux = $self->{mux};
 
-    if($url =~ /perl2/) {
+    if($url =~ /perl(?:root)?2/) {
         my ($fh, $pid, $stdout, $stderr) = url_connect($url, @args);
         $self->add($fh, 
             Pid => $pid, 
