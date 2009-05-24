@@ -215,10 +215,10 @@ sub new {
 
         # Connect retries
         connect_args  => {},
-        connect_retries => defined $args{Retries} ? $args{Retries} : 3,
+        connect_retries => defined $args{Retries} ? $args{Retries} : 0,
         
         # Connect timeouts
-        default_timeout => defined $args{Timeout} ? $args{Timeout} : 3,
+        default_timeout => defined $args{Timeout} ? $args{Timeout} : 0,
         procedure_timeouts => {},
         
         # Rate limitation

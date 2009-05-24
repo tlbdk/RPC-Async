@@ -21,6 +21,7 @@ my $rpc = RPC::Async::Client->new(
     Timeout => 0,
     Limit => 0,
     CloseOnIdle => 1,
+    Retries => 2,
     
     # TODO: Test a implement an actual algorythm
     RateLimitOnRemove => sub { # Called on remove
