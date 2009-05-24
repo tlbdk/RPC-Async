@@ -70,15 +70,18 @@ use RPC::Async::URL;
 
 use Scalar::Util qw(blessed);
 
-our $AUTOLOAD;
+use Data::Dumper; 
 
+our $AUTOLOAD;
 sub AUTOLOAD {
     my $self = shift;
     my $procedure = $AUTOLOAD;
     $procedure =~ s/.*:://;
-    
-    croak "Call to local non-existing function $procedure without self : $self"
-        if !blessed($self);
+   
+    # TODO: Check who is the caller so we can do better errors for internal
+    # function calls
+    croak "Non-existing RPC::Client function $procedure(".($self or '').")"
+        if !defined $self or !blessed($self);
 
     # Same as $self->call($procedure, @_) but caller now returns a level higher
     @_ = ($self, $procedure, @_);
@@ -489,7 +492,6 @@ sub io {
             # TODO: Check for RPC: call to limit 
             if($@) {
                 if(ref $@ eq '' and $@ =~ /^RPC:/) {
-                    print Dumper($@);
                     print "killed connection because of '$@'\n";
                     # Try to reconnect if this was unexpected
                     $mux->kill($fh);
@@ -518,7 +520,7 @@ sub io {
 
         } elsif($type eq 'error') {
             # Close the server if the connection is closed
-            print Dumper($event);
+            print Dumper({error_event => $event});
             # Try to reconnect if this was unexpected
             $mux->kill($fh);
             $self->_try_reconnect($fh, 'errro');
@@ -772,7 +774,7 @@ sub _waitpid {
         # Delete the id waiting in requests if we cought the waitpid before
         while(my $id = shift @{$self->{waitpid_ids}{$fh}}) {
             print "collected pid $pid on id $id\n";
-            print Dumper(delete $self->{requests}{$id});
+            delete $self->{requests}{$id};
         }
     }
 }
