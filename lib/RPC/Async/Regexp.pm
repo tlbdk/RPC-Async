@@ -31,6 +31,9 @@ sub new {
             croak "Could not parse Regexp: $regexp";
         }
     }
+    
+    # Escape /
+    $regexp =~ s/\//\\\//gs;
 
     my $self = bless {
         regexp => $regexp,
@@ -48,7 +51,9 @@ Return a normal perl regexp with the correct options set
 =cut
 
 sub build {
-   return eval("qr/$_[0]->{regexp}/$_[0]->{options}"); ## no critic 
+    my $re = eval("qr/$_[0]->{regexp}/$_[0]->{options}"); ## no critic
+    croak "Could not build $_[0]->{regexp} : $@" if $@;
+    return $re;
 }
 
 1;
