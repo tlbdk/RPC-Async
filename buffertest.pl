@@ -31,7 +31,7 @@ sub deserialize_storable {
         } elsif (ref $thawed eq "ARRAY" and @$thawed >= 1) {
             print "$length\n";
             # Remove deserialize part of buffer
-            substr(${$_[0]}, 0, $length + 4) = '';
+            substr(${$_[0]}, 0, $length + 4, '');
             return $thawed;
         }
     }
