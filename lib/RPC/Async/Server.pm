@@ -142,6 +142,8 @@ sub new {
     my $self = bless {
         package => $args{Package},
         mux => $args{Mux},
+        metas => {}, # { $key" => 'data' }
+        metakeys => {}, # { $fh => [$key, ...] }
         fhs => {}, # { $fh => 'data' }
         serial => 0,
         timeouts => [], # [[time + $timeout, $id], ...]
@@ -320,6 +322,58 @@ sub error {
     croak "caller is not an array ref" if ref $caller ne 'ARRAY';
     
     push(@{$self->{waiting}}, [@$caller, 'die', $str]);
+}
+
+=head2 C<meta($key, [$value], [$caller])>
+
+Set or get a piece of metadata on a specific global key where RPC::Async will
+cleanup up the metadata when the client disconnects. Setting undefined $value
+will delete the key.
+
+Save $value :
+
+  sub rpc_save {
+    my($caller, $key, $value) = @_;
+    $rpc->meta($key, $value, $caller);
+    $rpc->return();
+  }
+
+Get $value :
+  
+  sub rpc_get {
+    my($caller, $key) = @_;
+    my $value = $rpc->meta($key);
+    $rpc->meta($key, 'new value'); # Set new value on same connection
+    $rpc->return($value);
+  }
+
+NOTE: Sharing key between several client connections is not supported.
+
+=cut
+
+sub meta {
+    my ($self, $key, $value, $caller) = @_;
+    croak "no key defined" if !defined $key;
+
+    if (@_ == 3) {
+        if(!defined $value) {
+            delete $self->{metas}{$key};
+            # Cleanup keys
+            foreach my $fh ($self->{metakeys}) {
+               @{$self->{metakeys}{$fh}} = grep { $_ ne $key } @{$self->{metakeys}{$fh}};
+            }
+        } else { 
+            $self->{metas}{$key} = $value;
+        }
+
+    } elsif (@_ == 4) {
+        croak "caller is not an array ref" if ref $caller ne 'ARRAY';
+        my ($fh) = @{$caller};
+        $self->{metas}{$key} = $value;
+        push(@{$self->{metakeys}{$fh}}, $key);
+    }
+    
+    return $self->{metas}{$key};
 }
 
 
@@ -513,6 +567,15 @@ sub _data {
 sub _close {
     my($self, $fh) = @_;
     delete $self->{fhs}{$fh};
+    
+    # Cleanup data from meta()
+    if (my $metakeys = delete $self->{metakeys}{$fh}) {
+        foreach my $key (@{$metakeys}) {
+            delete $self->{metas}{$key};
+        }
+    }
+    
+    # Clean up retry ids from retry() 
     if (my $client_ids = delete $self->{callers}{$fh}) {
         foreach my $id (values %{$client_ids}) {
             delete $self->{retries}{$id};

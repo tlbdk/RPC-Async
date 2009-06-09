@@ -52,6 +52,18 @@ sleep $sleep if $sleep;
 
 print "All clients quit, so shutting down\n" if $INFO;
 
+sub rpc_set_meta {
+    my ($caller, $value) = @_;
+    $rpc->meta('meta-test', $value, $caller); # Store the sub for later use on same client connection
+    $rpc->return($caller);
+}
+
+sub rpc_get_meta {
+    my ($caller) = @_;
+    my $value = $rpc->meta('meta-test');
+    $rpc->return($caller, $value);
+}
+
 sub rpc_server_timeout {
     my ($caller) = @_;
 }
