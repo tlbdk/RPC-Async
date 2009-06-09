@@ -142,7 +142,7 @@ sub new {
     my $self = bless {
         package => $args{Package},
         mux => $args{Mux},
-        metas => {}, # { $key" => 'data' }
+        metas => {}, # { $key => { $fh => 'data' } }
         metakeys => {}, # { $fh => [$key, ...] }
         fhs => {}, # { $fh => 'data' }
         serial => 0,
@@ -326,9 +326,12 @@ sub error {
 
 =head2 C<meta($key, [$value], [$caller])>
 
+# TODO: Reverse $value and $caller so we can get specific keys 
+
 Set or get a piece of metadata on a specific global key where RPC::Async will
 cleanup up the metadata when the client disconnects. Setting undefined $value
-will delete the key.
+will delete the key. If more clients use the same key an array of all client
+values is returned.
 
 Save $value :
 
@@ -343,11 +346,8 @@ Get $value :
   sub rpc_get {
     my($caller, $key) = @_;
     my $value = $rpc->meta($key);
-    $rpc->meta($key, 'new value'); # Set new value on same connection
     $rpc->return($value);
   }
-
-NOTE: Sharing key between several client connections is not supported.
 
 =cut
 
@@ -358,10 +358,6 @@ sub meta {
     if (@_ == 3) {
         if(!defined $value) {
             delete $self->{metas}{$key};
-            # Cleanup keys
-            foreach my $fh ($self->{metakeys}) {
-               @{$self->{metakeys}{$fh}} = grep { $_ ne $key } @{$self->{metakeys}{$fh}};
-            }
         } else { 
             $self->{metas}{$key} = $value;
         }
@@ -369,11 +365,16 @@ sub meta {
     } elsif (@_ == 4) {
         croak "caller is not an array ref" if ref $caller ne 'ARRAY';
         my ($fh) = @{$caller};
-        $self->{metas}{$key} = $value;
-        push(@{$self->{metakeys}{$fh}}, $key);
+        if(!defined $value) {
+            delete $self->{metas}{$key}{$fh};
+            delete $self->{metas}{$key} if !keys%{$self->{metas}{$key}};
+        } else {
+            $self->{metas}{$key}{$fh} = $value;
+        }
     }
-    
-    return $self->{metas}{$key};
+   
+    return if !exists $self->{metas}{$key};
+    return values %{$self->{metas}{$key}};
 }
 
 
@@ -568,11 +569,10 @@ sub _close {
     my($self, $fh) = @_;
     delete $self->{fhs}{$fh};
     
-    # Cleanup data from meta()
-    if (my $metakeys = delete $self->{metakeys}{$fh}) {
-        foreach my $key (@{$metakeys}) {
-            delete $self->{metas}{$key};
-        }
+    # Clean up meta data from meta() 
+    foreach my $key (keys %{$self->{metas}}) {
+        delete $self->{metas}{$key}{$fh};
+        delete $self->{metas}{$key} if !keys%{$self->{metas}{$key}};
     }
     
     # Clean up retry ids from retry() 

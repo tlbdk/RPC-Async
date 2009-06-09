@@ -60,8 +60,8 @@ sub rpc_set_meta {
 
 sub rpc_get_meta {
     my ($caller) = @_;
-    my $value = $rpc->meta('meta-test');
-    $rpc->return($caller, $value);
+    my @values = $rpc->meta('meta-test');
+    $rpc->return($caller, @values);
 }
 
 sub rpc_server_timeout {
