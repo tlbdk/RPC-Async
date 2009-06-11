@@ -143,7 +143,6 @@ sub new {
         package => $args{Package},
         mux => $args{Mux},
         metas => {}, # { $key => { $fh => 'data' } }
-        metakeys => {}, # { $fh => [$key, ...] }
         fhs => {}, # { $fh => 'data' }
         serial => 0,
         timeouts => [], # [[time + $timeout, $id], ...]
@@ -324,20 +323,23 @@ sub error {
     push(@{$self->{waiting}}, [@$caller, 'die', $str]);
 }
 
-=head2 C<meta($key, [$value], [$caller])>
-
-# TODO: Reverse $value and $caller so we can get specific keys 
+=head2 C<meta($key, [$caller], [$value], [$type])>
 
 Set or get a piece of metadata on a specific global key where RPC::Async will
 cleanup up the metadata when the client disconnects. Setting undefined $value
 will delete the key. If more clients use the same key an array of all client
-values is returned.
+values are returned. If $type is set the ref of type of will be used to store
+the values per $key. Eg. {} will store the values in a hash making then uniq 
+and [] in an array. The $type can not be changed after first use, the the key
+needs to deleted and recreated.
 
 Save $value :
 
   sub rpc_save {
     my($caller, $key, $value) = @_;
-    $rpc->meta($key, $value, $caller);
+    $rpc->meta($key, $caller, $value); # Set $key to $value
+    $rpc->meta($key, $caller, "$value1", []); # Override $key and add $value1 to an internal array
+    $rpc->meta($key, $caller, "$value2", []); # Add $value1 to the internal array for key
     $rpc->return();
   }
 
@@ -345,38 +347,76 @@ Get $value :
   
   sub rpc_get {
     my($caller, $key) = @_;
-    my $value = $rpc->meta($key);
-    $rpc->return($value);
+    my @all_values = $rpc->meta($key);
+    my @connection_value = $rpc->meta($key, $caller);
+    
+    # Delete all values on $key for this connection
+    $rpc->meta($key, $caller, undef); 
+    
+    # Delete all values on $key
+    $rpc->meta($key, undef); 
+    
+    $rpc->return(\@all_values, \@connection_value);
   }
 
 =cut
 
 sub meta {
-    my ($self, $key, $value, $caller) = @_;
+    my ($self, $key, $caller, $value, $type) = @_;
     croak "no key defined" if !defined $key;
+    my $data;
 
-    if (@_ == 3) {
-        if(!defined $value) {
-            delete $self->{metas}{$key};
-        } else { 
-            $self->{metas}{$key} = $value;
-        }
+    if (@_ == 2) { # Get all values on $key
+        return if !exists $self->{metas}{$key};
+        $data = $self->{metas}{$key}; 
 
-    } elsif (@_ == 4) {
+    } elsif (@_ == 3) { # Get all values on $key for this $caller connection
+        return delete $self->{metas}{$key} if !defined $caller;
         croak "caller is not an array ref" if ref $caller ne 'ARRAY';
-        my ($fh) = @{$caller};
+        
+        $data = $self->{metas}{$key}{$caller->[0]};
+
+    } elsif (@_ == 4) { # Set new value on $key for this $caller
+        croak "caller is not an array ref" if ref $caller ne 'ARRAY';
         if(!defined $value) {
-            delete $self->{metas}{$key}{$fh};
-            delete $self->{metas}{$key} if !keys%{$self->{metas}{$key}};
+            my $res = delete $self->{metas}{$key}{$caller->[0]};
+            delete $self->{metas}{$key} if keys %{$self->{metas}{$key}} == 0;
+            return $res;
         } else {
-            $self->{metas}{$key}{$fh} = $value;
+            $self->{metas}{$key}{$caller->[0]} = $value;
         }
+    
+    } elsif (@_ == 5) { # Add new value to $key on this $caller
+        croak "caller is not an array ref" if ref $caller ne 'ARRAY';
+        if(ref $type eq 'HASH') {
+            $self->{metas}{$key}{$caller->[0]}{$value} = $value;
+        } elsif(ref $type eq 'ARRAY') {
+            push(@{$self->{metas}{$key}{$caller->[0]}}, $value);
+        } else {
+            $self->{metas}{$key}{$caller->[0]} = $value;
+        }
+
+    } else {
+        croak "Called with wrong number of arguments: ".int(@_);
+    }
+
+    # Return values
+    if(ref $data eq 'HASH' or ref $data eq 'ARRAY') {
+        return map { 
+            if(ref $_ eq 'ARRAY') {
+                @{$_};
+            } elsif(ref $_ eq 'HASH') {
+                values %{$_}
+            } else {
+                $_;
+            }
+        } ref $data eq 'HASH' ? (values %{$data}) : @{$data};
+    
+    } elsif(ref $data eq '') {
+        return $data; 
     }
    
-    return if !exists $self->{metas}{$key};
-    return values %{$self->{metas}{$key}};
 }
-
 
 =head2 C<io($event)>
 

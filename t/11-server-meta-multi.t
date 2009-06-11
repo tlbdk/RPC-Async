@@ -2,7 +2,7 @@ use strict;
 use warnings;
 use Carp;
 
-use Test::More tests => 6;
+use Test::More tests => 7;
 use RPC::Async::Client;
 use RPC::Async::URL;
 use RPC::Async::Util qw(encode_args);
@@ -68,12 +68,16 @@ my ($fh, $pid) = url_connect("perlheader://./test-server.pl", $cfd_rpc);
 $mux->add($fh);
 $rpc->add($fh);
 
-$rpc->set_meta("Value from client 1", sub {
+$rpc->set_meta("Value from client 1 : 1", sub {
     ok(!$@, "We did not get an exception 1");
 
     my $fh = url_connect("unix://./socks/test-server.sock");
     $mux->add($fh);
     $rpc2->add($fh);
+});
+
+$rpc->set_meta("Value from client 1 : 2", sub {
+    ok(!$@, "We did not get an exception 1");
 });
 
 # Timeout after 1 sec, TODO: Timing issue, we should do something better than this
@@ -85,8 +89,11 @@ $rpc2->set_meta("Value from client 2", sub {
     $rpc2->get_meta(sub {
         my @result = sort @_;
         print Dumper(\@_);
-        is_deeply(\@result, ["Value from client 1", "Value from client 2"], 
-            "We got our values back");
+        is_deeply(\@result, [
+            "Value from client 1 : 1", 
+            "Value from client 1 : 2",  
+            "Value from client 2"], 
+        "We got our values back");
     });
 });
 
@@ -104,4 +111,3 @@ ok(!$rpc2->has_work, "Work queue is empty as it should be");
 # Wait for server to quit
 kill 1, $pid; 
 is(waitpid($pid, 0), $pid, "The pid was colleted without any problems");
-

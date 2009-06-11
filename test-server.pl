@@ -54,7 +54,7 @@ print "All clients quit, so shutting down\n" if $INFO;
 
 sub rpc_set_meta {
     my ($caller, $value) = @_;
-    $rpc->meta('meta-test', $value, $caller); # Store the sub for later use on same client connection
+    $rpc->meta('meta-test', $caller, $value, []); # Store the sub for later use on same client connection
     $rpc->return($caller);
 }
 
