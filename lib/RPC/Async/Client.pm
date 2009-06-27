@@ -4,9 +4,9 @@ use warnings;
 
 our $VERSION = '2.00';
 
-my $DEBUG = 1;
-my $TRACE = 1;
-my $INFO = 1;
+my $DEBUG = 0;
+my $TRACE = 0;
+my $INFO = 0;
 
 # TODO: Retries should be able to limited to a number of retries
 # within a period of time. Eg. You can fail 3 times in 1 hour, a quick way to

@@ -7,9 +7,9 @@ use Carp;
 
 our $VERSION = '2.00';
 
-my $DEBUG = 1;
-my $TRACE = 1;
-my $INFO = 1;
+my $DEBUG = 0;
+my $TRACE = 0;
+my $INFO = 0;
 
 =head1 NAME
 
