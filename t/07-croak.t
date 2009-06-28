@@ -21,7 +21,6 @@ my $rpc = RPC::Async::Client->new(
         }
         print "$type($fh)\: '$str'";
     },
-    Exceptions => 1,
 );
 
 $rpc->connect("perl2://./test-server.pl",
