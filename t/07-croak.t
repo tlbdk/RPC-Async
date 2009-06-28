@@ -19,7 +19,7 @@ my $rpc = RPC::Async::Client->new(
             cmp_ok($str, "=~", "Died waiting after sleep at.*test-server.pl",
                 "The server dies with an error as it should");
         }
-        print "$type($fh)\: '$str'";
+        print "$type($fh)\: '$str'\n";
     },
 );
 
@@ -31,7 +31,7 @@ $rpc->exception(
     side => "CLIENT", 
     msg => 'Croak on client side', 
     sub {
-        is($@, "Croak on client side at t/07-croak.t in RPC::Async::Client->exception() line 38\n", 
+        like($@, qr{Croak on client side at t/07-croak.t in RPC::Async::Client->exception}, 
             "We returned and got timeout as expected");
     }
 );
@@ -41,7 +41,7 @@ $rpc->exception(
     side => "CLIENT", 
     msg => 'Die on client side', 
     sub {
-        is($@, "Die on client side at t/07-croak.t in RPC::Async::Client->exception() line 48\n", 
+        like($@, qr{Die on client side at t/07-croak.t in RPC::Async::Client->exception}, 
             "We returned and got timeout as expected");
     }
 );

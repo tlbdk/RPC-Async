@@ -114,26 +114,6 @@ The default value is 10MB.
 sub new {
     my ($class, %args) = @_;
 
-    if($args{Serialize}) {
-        croak "Argument Serialize is not a code ref" 
-            if !ref $args{Serialize} eq 'CODE';
-        
-        *_serialize = $args{Serialize};
-
-    } else {
-        *_serialize =\&RPC::Async::Util::serialize_storable;
-    }
-
-    if($args{DeSerialize}) {
-        croak "Argument DeSerialize is not a code ref" 
-            if !ref $args{DeSerialize} eq 'CODE';
-
-        *_deserialize = $args{DeSerialize};
-    
-    } else {
-        *_deserialize = \&RPC::Async::Util::deserialize_storable;
-    }
-    
     if (!$args{Package}) {
         $args{Package} = caller;
     }
@@ -156,8 +136,17 @@ sub new {
         default_return => $args{DelayedReturn} ? $args{DelayedReturn} : 0,  # { 'procedure_name' => 0 }
         procedure_returns => {}, # { 'procedure_name' => 1 }  
 
-        max_request_size => defined $args{MaxRequestSize} ?
-            $args{MaxRequestSize} : 10 * 1024 * 1024, # 10MB
+        max_request_size => defined $args{MaxRequestSize} 
+            ? $args{MaxRequestSize} 
+            : 10 * 1024 * 1024, # 10MB
+
+        _deserialize => ref $args{DeSerialize} eq 'CODE' 
+            ? $args{DeSerialize}
+            : \&RPC::Async::Util::deserialize_storable,
+        
+        _serialize => ref $args{Serialize} eq 'CODE' 
+            ? $args{Serialize} 
+            : \&RPC::Async::Util::serialize_storable, 
     }, $class;
 
     return $self;
@@ -504,7 +493,7 @@ sub _append {
     $self->{fhs}{$fh} .= $data;
 
     while(length($self->{fhs}{$fh}) > 0) {
-        my $packet = _deserialize(\$self->{fhs}{$fh}, 
+        my $packet = $self->{_deserialize}->(\$self->{fhs}{$fh}, 
             $self->{max_request_size}); 
         
         # Drop out of loop if we need more data 
@@ -597,7 +586,7 @@ sub _data {
         }
 
         # Serialize data
-        my $data = _serialize([$client_id, $type, @args]);
+        my $data = $self->{_serialize}->([$client_id, $type, @args]);
 
         return ($fh, $data);
     }

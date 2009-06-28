@@ -151,10 +151,6 @@ Overrides the default deserialization function. TODO: Write more
 Overrides the default server output function when RPC::Async::Client is handling
 the server STDOUT and STDERR. TODO: Write more   
 
-=item Reconnect
-
-Overrides the default Reconnect function. TODO: Write more   
-
 =item MaxRequestSize
 
 Sets the max request size that RPC::Client::Async can handle. This is used to
@@ -170,39 +166,6 @@ The default value is 10MB.
 sub new {
     croak "Odd number of elements in %args" if ((@_ - 1) % 2);
     my ($class, %args) = @_;
-
-
-    if($args{Serialize}) {
-        croak "Argument Serialize is not a code ref" 
-            if !ref $args{Serialize} eq 'CODE';
-        
-        *RPC::Async::Client::_serialize = $args{Serialize};
-    } else {
-        *RPC::Async::Client::_serialize =\&RPC::Async::Util::serialize_storable;
-    }
-
-    if($args{DeSerialize}) {
-        croak "Argument DeSerialize is not a code ref" 
-            if !ref $args{DeSerialize} eq 'CODE';
-
-        *RPC::Async::Client::_deserialize = $args{DeSerialize};
-    } else {
-        *RPC::Async::Client::_deserialize = \&RPC::Async::Util::deserialize_storable;
-    }
-
-    if($args{Output}) {
-        croak "Argument Output is not a code ref" 
-            if !ref $args{Output} eq 'CODE';
-            *_output = $args{Output};
-    } else {
-        *_output = \&RPC::Async::Util::output;
-    }
-
-    if($args{Reconnect}) {
-        croak "Argument Output is not a code ref" 
-            if !ref $args{Reconnect} eq 'CODE';
-        *RPC::Async::Client::_try_reconnect = $args{Reconnect};
-    }
 
     my $self = bless {
         requests => {}, # { $id => { callback => sub {}, ... }, ... }
@@ -249,6 +212,18 @@ sub new {
         
         pids => {}, # { $fh => $pid, ... }
         waitpid_ids => {}, # { $fh => $id }
+        
+        _output => ref $args{Output} eq 'CODE' 
+            ? $args{Output}
+            : \&RPC::Async::Util::output,
+        
+        _deserialize => ref $args{DeSerialize} eq 'CODE' 
+            ? $args{DeSerialize}
+            : \&RPC::Async::Util::deserialize_storable,
+        
+        _serialize => ref $args{Serialize} eq 'CODE' 
+            ? $args{Serialize} 
+            : \&RPC::Async::Util::serialize_storable, 
     
     }, $class;
 
@@ -530,7 +505,7 @@ sub io {
 
     } elsif(my $item = $self->{extra_streams}{$fh}) {
         if($type eq 'read') {
-            _output($item->[0], $item->[1], $data);
+            $self->{_output}->($item->[0], $item->[1], $data);
         
         } elsif($type eq 'closed') {
             delete $self->{extra_streams}{$fh};
@@ -641,7 +616,7 @@ sub _append {
     #write_file('client-buffer.tmp', { binmode => ':raw' }, $self->{inputs}{$fh});
         
     while(length($self->{inputs}{$fh}) > 0) {
-        my $packet = _deserialize(\$self->{inputs}{$fh},
+        my $packet = $self->{_deserialize}->(\$self->{inputs}{$fh},
             $self->{max_request_size});
         
         # Drop out of loop if we need more data 
@@ -715,7 +690,7 @@ sub _data {
         my $fh = $self->{rrs}[$n];
         
         # Serialize data
-        my $data = _serialize([$id, $request->{procedure}, 
+        my $data = $self->{_serialize}->([$id, $request->{procedure}, 
             @{$request->{args}}]);
       
         # Registre the fh to the id
