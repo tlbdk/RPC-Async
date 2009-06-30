@@ -13,6 +13,7 @@ use RPC::Async::Server;
 use IO::EventMux;
 
 use English;
+use Data::Dumper;
 
 my $DEBUG = 1;
 my $TRACE = 1;
@@ -28,6 +29,14 @@ my $rpc = RPC::Async::Server->new(
 $rpc->set_options("server_timeout", Timeout => 1); # Return a timeout after 1 second
 # FIXME: Implement
 $rpc->set_options("non_delayed", DelayedReturn => 0); # Make normal return, return to client
+
+# Add cleanup code for @client_meta
+my @client_meta;
+$rpc->on_close(\@client_meta, sub {
+    # ($caller, @args) = @_;
+    # Remove all values that are "owned" by $caller
+    @{$_[1]} = grep { $_[1]->{$_}[1] ne $_[1] } @{$_[1]}; 
+});
 
 unlink "server.tmp";
 
@@ -51,6 +60,18 @@ print "sleeping\n" if $sleep;
 sleep $sleep if $sleep;
 
 print "All clients quit, so shutting down\n" if $INFO;
+
+sub rpc_set_meta2 {
+    my ($caller, $value) = @_;
+    push(@client_meta, [$value, $caller]);
+    $rpc->return($caller);
+}
+
+sub rpc_get_meta2 {
+    my ($caller) = @_;
+    print Dumper(\@client_meta);
+    $rpc->return($caller, map { $_->[0] } @client_meta);
+}
 
 sub rpc_set_meta {
     my ($caller, $value) = @_;

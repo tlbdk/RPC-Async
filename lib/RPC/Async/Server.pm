@@ -312,6 +312,14 @@ sub error {
     push(@{$self->{waiting}}, [@$caller, 'die', $str]);
 }
 
+=head2 C<on_close($caller, [$ref, ...])>
+
+=cut
+
+sub on_close {
+    #TODO
+}
+
 =head2 C<meta($key, [$caller], [$value], [$type])>
 
 Set or get a piece of metadata on a specific global key where RPC::Async will
