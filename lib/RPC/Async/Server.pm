@@ -456,7 +456,6 @@ sub io {
             $self->_close($fh); 
         
         } elsif($type eq 'error') {
-            print Dumper($event);
             $self->_close($fh); 
             $mux->kill($fh);
         }
