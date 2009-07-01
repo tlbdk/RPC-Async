@@ -481,7 +481,7 @@ sub io {
             # Try to reconnect if this was unexpected
             $self->_try_reconnect($fh, 'closing');
        
-            # Check if all extra fh's are close for this server 
+            # Check if all extra fh's are closed for this server 
             if(keys %{$self->{extra_fhs}{$fh}} == 0) {
                 print "main: last file handle for this server\n";
                 # Collect server pid
@@ -672,7 +672,6 @@ sub _append {
 sub _data {
     my($self) = @_;
 
-    # TODO: Make into croak
     # Don't give output if we have no connected servers
     return if !keys %{$self->{fhs}};
 
@@ -680,7 +679,7 @@ sub _data {
     return if $limit > 0 and $self->{outstanding} >= $limit; 
 
     if(my $id = shift @{$self->{waiting}}) {
-        my $request = $self->{requests}{$id} or next;
+        my $request = $self->{requests}{$id} or die "Unknown id waiting: $id";
 
         # TODO: Check in key_queue if we have a limit_key on the request that
         # match and we can queue a new item from key_queue on @waiting.
@@ -807,8 +806,8 @@ sub _try_reconnect {
                 $@ = 'no more connect retries';
                 $request->{callback}->();
             }
-            # TODO: Make croaking optional as this is a valid excuse for giving up
-            #croak "RPC: no more connect retries";
+            # Empty waiting so we don't try to send some data
+            $self->{waiting} = [];
         }
     }
 }
