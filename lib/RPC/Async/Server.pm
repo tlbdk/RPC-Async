@@ -203,6 +203,7 @@ sub return {
     my ($self, $caller, @args) = @_;
     
     croak "caller is not an array ref" if ref $caller ne 'ARRAY';
+    return if !exists $self->{fhs}{$caller->[0]};
 
     # TODO: Replace 'type' with CONSTANTS
     push(@{$self->{waiting}}, [@$caller, 'result', @args]);
@@ -308,6 +309,7 @@ sub error {
     my ($self, $caller, $str) = @_;
    
     croak "caller is not an array ref" if ref $caller ne 'ARRAY';
+    return if !exists $self->{fhs}{$caller->[0]};
     
     push(@{$self->{waiting}}, [@$caller, 'die', $str]);
 }
