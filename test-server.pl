@@ -43,7 +43,7 @@ unlink "server.tmp";
 # TODO: Make check all rpc_* that they do not colide with client functions
 
 # Add the filehandle(pipe) that url_connect call created
-foreach my $fh (url_clients($rpc)) {
+foreach my $fh (url_clients()) {
     print "add url_client: $fh\n" if $INFO;
     $mux->add($fh);
     $rpc->add($fh);

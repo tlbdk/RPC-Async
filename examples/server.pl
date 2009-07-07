@@ -6,11 +6,14 @@ use RPC::Async::Server;
 use IO::EventMux;
 
 my $mux = IO::EventMux->new;
-my $rpc = RPC::Async::Server->new($mux);
-init_clients($rpc);
+my $rpc = RPC::Async::Server->new(Mux => $mux);
+foreach my $fh (url_clients()) {
+    $mux->add($fh);
+    $rpc->add($fh);
+}
 
-while ($rpc->has_clients()) {
-    my $event = $rpc->io($mux->mux) or next;
+while (my $event = $mux->mux($rpc->timeout())) {
+    next if $rpc->io($event);
 }
 
 sub rpc_add_numbers {

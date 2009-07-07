@@ -110,7 +110,6 @@ sub url_connect {
             open my $sock, "+<&=", $fd or die "Cannot open fd $fd\n";
             
             sub url_clients {
-                my ($rpc) = @_;
                 return $sock;
             }
             
