@@ -189,7 +189,7 @@ sub new {
         procedure_timeouts => {},
         
         # Rate limitation
-        default_limit => defined $args{Limit} ? $args{Limit} : 0,
+        default_limit => defined $args{Limit} ? $args{Limit} : 0, # TODO: Rename to SentLimit
         outstanding => 0, 
        
         # TODO: implement code that uses this.
