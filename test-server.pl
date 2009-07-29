@@ -125,6 +125,11 @@ sub rpc_simple {
     $rpc->return($_[0], 1);
 }
 
+sub rpc_echo {
+    my ($caller, @args) = @_;
+    $rpc->return($caller, @args);
+}
+
 # Named parameter with positional information because of name
 sub def_add_numbers { $_[1] ? { n1 => 'int', n2 => 'int' } : { sum => 'int' }; }
 sub rpc_add_numbers {

@@ -131,7 +131,7 @@ TODO: Write more
 =cut
 
 sub encode_args {
-    my ($self, $args) = @_;
+    my ($self, $args, $filter) = @_;
     my @result;
 
     my @walk = ($args);
@@ -150,12 +150,31 @@ sub encode_args {
                 $$obj = RPC::Async::Coderef->new($id);
             
             } elsif (UNIVERSAL::isa($$obj, "IO::Socket")) {
-                # TODO: Allow this for unix domain sockets 
-                croak "RPC: Cannot pass IO::Socket objects";
+                # TODO: Allow this for unix domain sockets:
+                #   * As pass fh over unix domain socket call
+                #   * Path to unix domain socket and open in decode fase
+                if($filter) { 
+                    $$obj = 'could not encode IO::Socket';
+                } else {
+                    croak "RPC: Cannot pass IO::Socket objects";
+                }
+            
+            } elsif (UNIVERSAL::isa($$obj, "GLOB")) {
+                # TODO: Allow this for unix domain sockets:
+                #   * As pass fh over unix domain socket call
+                #   * Path to unix domain socket and open in decode fase
+                if($filter) { 
+                    $$obj = 'could not encode GLOB';
+                } else {
+                    croak "RPC: Cannot pass GLOB objects";
+                }
 
             } else {
-                #use Data::Dumper; print Dumper($obj);
-                croak "RPC: Unknown scalar type $type";
+                if($filter) {
+                    $$obj = "could not encode unknown : $type";
+                } else {
+                    croak "RPC: Unknown scalar type $type";
+                }
             }
         
         } elsif($type eq 'HASH') { # Hash

@@ -63,7 +63,7 @@ further documented.
 
 use Carp;
 use Socket;
-use RPC::Async::Util qw(encode_args queue_timeout unique_id);
+use RPC::Async::Util qw(decode_args encode_args queue_timeout unique_id);
 use RPC::Async::Coderef;
 use RPC::Async::Regexp;
 use RPC::Async::URL;
@@ -212,7 +212,9 @@ sub new {
         
         pids => {}, # { $fh => $pid, ... }
         waitpid_ids => {}, # { $fh => $id }
-        
+
+        filter_args => $args{FilterArguments} ? 1 : 0,
+
         _output => ref $args{Output} eq 'CODE' 
             ? $args{Output}
             : \&RPC::Async::Util::output,
@@ -272,7 +274,7 @@ sub call {
         $self->{requests}{$id} = { 
             callback => $callback, 
             procedure => $procedure,
-            args => encode_args($self, \@args),
+            args => encode_args($self, \@args, $self->{filter_args}),
             caller => [ caller() ],
         };
         push(@{$self->{waiting}}, $id);
@@ -630,8 +632,10 @@ sub _append {
         # Drop out of loop if we need more data 
         last if !$packet; 
 
-        my ($id, $type, @args) = @{$packet};
-    
+        my ($id, $type, $args) = @{$packet};
+        my @args = eval { @{decode_args($self, $fh, $args)} };
+        # TODO : Check if we get an exception and do something with it.
+
         croak "RPC: Not a valid id" if !(defined $id or $id =~ /^\d+$/);
        
         #print Dumper({id => $id, type => $type, args => \@args});
@@ -654,7 +658,6 @@ sub _append {
                         ."->$procedure() line $line\n";
                 }
             }
-            
             $request->{callback}->(@args);
             
             # Restore exception state
