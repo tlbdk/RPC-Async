@@ -78,7 +78,7 @@ client sends invalid data, throw an exception to disconnect him.
 =cut
 
 use IO::EventMux;
-use RPC::Async::Util qw(expand decode_args queue_timeout unique_id);
+use RPC::Async::Util qw(expand encode_args decode_args queue_timeout unique_id);
 
 =head2 C<new([%args])>
 
@@ -136,6 +136,8 @@ sub new {
         default_return => $args{DelayedReturn} ? $args{DelayedReturn} : 0,  # { 'procedure_name' => 0 }
         procedure_returns => {}, # { 'procedure_name' => 1 }  
 
+        filter_args => $args{FilterArguments} ? 1 : 0,
+        
         max_request_size => defined $args{MaxRequestSize} 
             ? $args{MaxRequestSize} 
             : 10 * 1024 * 1024, # 10MB
@@ -594,8 +596,9 @@ sub _data {
             delete $self->{retries}{$id};
         }
 
-        # Serialize data
-        my $data = $self->{_serialize}->([$client_id, $type, @args]);
+        # Serialize and encode data
+        my $args = encode_args($self, \@args, $self->{filter_args});
+        my $data = $self->{_serialize}->([$client_id, $type, $args]);
 
         return ($fh, $data);
     }
