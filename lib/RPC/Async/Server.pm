@@ -107,6 +107,15 @@ deserialization.
 
 The default value is 10MB.
 
+=item EncodeError
+
+By default all the arguments and return values filtered for data types that
+can't be serialized for one reasons or another, and a string of "could not
+encode <type>" is used instead. By setting EncodeError an exception is thrown
+instead.
+
+TODO : Document all options
+
 =back
 
 =cut
@@ -136,7 +145,7 @@ sub new {
         default_return => $args{DelayedReturn} ? $args{DelayedReturn} : 0,  # { 'procedure_name' => 0 }
         procedure_returns => {}, # { 'procedure_name' => 1 }  
 
-        filter_args => $args{FilterArguments} ? 1 : 0,
+        filter_args => $args{EncodeError} ? 0 : 1,
         
         max_request_size => defined $args{MaxRequestSize} 
             ? $args{MaxRequestSize} 

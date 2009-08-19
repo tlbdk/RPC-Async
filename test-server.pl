@@ -61,6 +61,13 @@ sleep $sleep if $sleep;
 
 print "All clients quit, so shutting down\n" if $INFO;
 
+sub rpc_return_fh {
+    my ($caller) = @_;
+    open my $fh, "<", "test-server.pl";
+    $rpc->return($caller, $fh);
+    close $fh;
+}
+
 sub rpc_set_meta2 {
     my ($caller, $value) = @_;
     push(@client_meta, [$value, $caller]);

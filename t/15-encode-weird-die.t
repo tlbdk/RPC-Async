@@ -2,7 +2,7 @@ use strict;
 use warnings;
 use Carp;
 
-use Test::More tests => 4;
+use Test::More tests => 2;
 use RPC::Async::Client;
 use RPC::Async::URL;
 use RPC::Async::Util qw(encode_args);
@@ -22,6 +22,7 @@ my $rpc = RPC::Async::Client->new(
     Limit => 0,
     CloseOnIdle => 1,
     WaitPidTimeout => 0,
+    EncodeError => 1,
 );
 
 $rpc->connect("perl2://./test-server.pl");
@@ -29,23 +30,14 @@ $rpc->connect("perl2://./test-server.pl");
 my $fh = url_listen("tcp://0.0.0.0:7741");
 my ($fh2, $pid, $stdout, $stderr) = url_connect("perl2://./test-server.pl");
 
-$rpc->echo(fh => $fh, fh2 => $fh2, stderr => $stderr, stdout => $stdout,
+eval { $rpc->echo(fh => $fh,
     sub {
-        my %args = @_;
-        ok(!$@, "No exception was set");
-        is_deeply(\%args, {
-            fh => "could not encode IO::Socket", 
-            fh2 => "could not encode GLOB", 
-            stderr => "could not encode GLOB", 
-            stdout => "could not encode GLOB", 
-        });
+        fail("We should not return as we should fail before");
     }
-);
+); 
+};
+like($@, qr/RPC: Cannot pass IO::Socket objects/, "Got an error trying to send a fh");
 
-$rpc->return_fh(sub {
-    is($_[0], "could not encode GLOB", 
-        "We should get error trying to return an fh");    
-});
 
 while (my $event = $mux->mux($rpc->timeout())) {
     next if $rpc->io($event);
