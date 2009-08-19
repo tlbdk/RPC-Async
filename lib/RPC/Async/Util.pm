@@ -132,68 +132,51 @@ TODO: Write more
 
 sub encode_args {
     my ($self, $args, $filter) = @_;
-    my @result;
 
-    my @walk = ($args);
-    while(my $obj = shift @walk) {
-        my $type = ref($obj);
-        #print "$type : $obj\n";
+    my $error = $filter 
+        ? sub { $_[0] = "could not encode unknown : ".ref($_[0]); } 
+        : sub { croak "RPC(encode): Unknown scalar type ".ref($_[0]); }; 
 
-        if($type eq 'REF') { # Refrence
-            $type = ref $$obj;
-            if ($type eq "Regexp") {
-                $$obj = RPC::Async::Regexp->new($$obj);
-            
-            } elsif ($type eq "CODE") {
-                my $id = unique_id(\$self->{serial});
-                $self->{coderefs}{$id} = $$obj;
-                $$obj = RPC::Async::Coderef->new($id);
-            
-            } elsif (UNIVERSAL::isa($$obj, "IO::Socket")) {
-                # TODO: Allow this for unix domain sockets:
-                #   * As pass fh over unix domain socket call
-                #   * Path to unix domain socket and open in decode fase
-                if($filter) { 
-                    $$obj = 'could not encode IO::Socket';
-                } else {
-                    croak "RPC: Cannot pass IO::Socket objects";
-                }
-            
-            } elsif (UNIVERSAL::isa($$obj, "GLOB")) {
-                # TODO: Allow this for unix domain sockets:
-                #   * As pass fh over unix domain socket call
-                #   * Path to unix domain socket and open in decode fase
-                if($filter) { 
-                    $$obj = 'could not encode GLOB';
-                } else {
-                    croak "RPC: Cannot pass GLOB objects";
-                }
+    return tree_filter($args, sub {
+        my $type = ref($_[0]);
+   
+        if ($type eq "Regexp") {
+            $_[0] = RPC::Async::Regexp->new($_[0]);
 
+        } elsif ($type eq "CODE") {
+            my $id = unique_id(\$self->{serial});
+            $self->{coderefs}{$id} = $_[0];
+            $_[0] = RPC::Async::Coderef->new($id);
+
+        } elsif (UNIVERSAL::isa($_[0], "IO::Socket")) {
+            # TODO: Allow this for unix domain sockets:
+            #   * As pass fh over unix domain socket call
+            #   * Path to unix domain socket and open in decode fase
+            if($filter) { 
+                $_[0] = 'could not encode IO::Socket';
             } else {
-                if($filter) {
-                    $$obj = "could not encode unknown : $type";
-                } else {
-                    croak "RPC: Unknown scalar type $type";
-                }
+                croak "RPC: Cannot pass IO::Socket objects";
             }
-        
-        } elsif($type eq 'HASH') { # Hash
-            push(@walk, map { (ref $_ eq 'HASH' or ref $_ eq 'ARRAY') 
-                    ? $_ : \$_ } values %{$obj});
-        
-        } elsif($type eq 'ARRAY') { # Array
-            push(@walk, map { (ref $_ eq 'HASH' or ref $_ eq 'ARRAY') 
-                    ? $_ : \$_ } @{$obj});
-        
-        } elsif($type eq 'SCALAR') {
-            # IGNORE
+            
+            return 1;
+
+        } elsif (UNIVERSAL::isa($_[0], "GLOB")) {
+            # TODO: Allow this for unix domain sockets:
+            #   * As pass fh over unix domain socket call
+            #   * Path to unix domain socket and open in decode fase
+            if($filter) { 
+                $_[0] = 'could not encode GLOB';
+            } else {
+                croak "RPC: Cannot pass GLOB objects";
+            }
+            
+            return 1;
+
         } else {
-            croak "RPC: Unknown scalar type $type";
+            return;
         }
-    }
-    
-    #use Data::Dumper; print Dumper($args);
-    return $args;
+
+    }, $error);
 }
 
 =head2 C<decode_args($self, $fh, \$args)>
@@ -203,53 +186,77 @@ TODO: Write more
 =cut
 
 sub decode_args {
-    my ($self, $fh, $args) = @_;
-    my @result;
+    my ($self, $fh, $args, $filter) = @_;
 
-    my @walk = ($args);
-    while(my $obj = shift @walk) {
-        my $type = ref($obj);
-        #print "$type : $obj\n";
+    my $error = $filter 
+        ? sub { $_[0] = "could not decode unknown : ".ref($_[0]); } 
+        : sub { croak "RPC(decode): Unknown scalar type ".ref($_[0]); }; 
 
-        if($type eq 'REF') { # Refrence
-            $type = ref $$obj;
-            if (UNIVERSAL::isa($$obj, "RPC::Async::Regexp")) {
-                $$obj = $$obj->build();
-            
-            } elsif (UNIVERSAL::isa($$obj, "RPC::Async::Coderef")) {
-                #use Data::Dumper; print Dumper({ obj => $$obj });
-                my $id = $$obj->id();
-            
-                # Setup the callbacks to push on the waiting queue
-                $$obj->set_call(sub {
-                    push(@{$self->{waiting}}, [$fh, $id, "call", @_])
-                });
-                $$obj->set_destroy(sub {
-                    push(@{$self->{waiting}}, [$fh, $id, "destroy", @_])
-                });
-                
+    return tree_filter($args, sub {
+        my $type = ref($_[0]);
 
-            } else {
-                croak "RPC: Unknown scalar type $type";
-            }
-        
-        } elsif($type eq 'HASH') { # Hash
-            push(@walk, map { (ref $_ eq 'HASH' or ref $_ eq 'ARRAY') 
-                    ? $_ : \$_ } values %{$obj});
-        
-        } elsif($type eq 'ARRAY') { # Array
-            push(@walk, map { (ref $_ eq 'HASH' or ref $_ eq 'ARRAY') 
-                    ? $_ : \$_ } @{$obj});
-        
-        } elsif($type eq 'SCALAR') {
-            # IGNORE
+        if (UNIVERSAL::isa($_[0], "RPC::Async::Regexp")) {
+            $_[0] = $_[0]->build();
+
+        } elsif (UNIVERSAL::isa($_[0], "RPC::Async::Coderef")) {
+            #use Data::Dumper; print Dumper({ obj => $$obj });
+            my $id = $_[0]->id();
+
+            # Setup the callbacks to push on the waiting queue
+            $_[0]->set_call(sub {
+                push(@{$self->{waiting}}, [$fh, $id, "call", @_])
+            });
+            $_[0]->set_destroy(sub {
+                push(@{$self->{waiting}}, [$fh, $id, "destroy", @_])
+            });
+
         } else {
-            croak "RPC: Unknown scalar type $type";
+            return;
         }
+
+    }, $error);
+}
+
+sub tree_filter {
+    my ($args, $filter, $error) = @_;
+    my $result;
+
+    my %refs;
+    
+    my @walk = (\$args);
+    while(my $obj = shift @walk) {
+        my $type = ref($$obj);
+
+        if($filter->($$obj, \%refs)) {
+            # Handled by filter - do nothing 
+   
+        } elsif($$obj and exists $refs{$$obj}) {
+            $$obj = $refs{$$obj}; # Handle cicular refrences
+        
+        } elsif ($type eq 'SCALAR' or $type eq '') {
+            # IGNORE - just a simple copy
+    
+        } elsif ($type eq 'HASH') { # Hash
+            $$obj = $refs{$$obj} = {%{$$obj}};  # Copy the hash, save old ref
+            push(@walk, map { \$_ } values %{$$obj});
+        
+        } elsif ($type eq 'ARRAY') { # Array
+            $$obj = $refs{$$obj} = [@{$$obj}];  # Copy the array, save old ref
+            push(@walk, map { \$_ } @{$$obj});
+        
+        } else {
+            $error->($$obj);
+        }
+        
+        # Make sure we make a ref to the first we are working with
+        $result = $$obj if !defined $result; 
     }
     
-    return $args;
+    #use Data::Dumper; print Dumper($args);
+    return $result;
 }
+
+
 
 =head2 expand($ref, $in)
 
