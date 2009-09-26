@@ -272,6 +272,8 @@ sub call {
     croak "Called RPC function $procedure without callback" 
         if ref $callback ne 'CODE';
 
+    # FIXME: Look into how quitting should work as we also need to die when
+    # reconnects fail
     if($self->{quitting}) {
         # In error state, all retries failed
         $@ = 'no more connect retries';
