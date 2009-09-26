@@ -2,6 +2,8 @@ package RPC::Async::Client;
 use strict;
 use warnings;
 
+use Misc::Logger;
+
 our $VERSION = '2.00';
 
 my $DEBUG = 0;
@@ -327,7 +329,7 @@ sub timeout {
         #use File::Slurp;
         #write_file('client.tmp', { binmode => ':raw', append => 1 }, "<start>".$data."<end>");
 
-        print "Sending packed data: $fh:\n" if $TRACE;
+        trace("Sending packed data: $fh");
         $self->{mux}->send($fh, $data);
     }
 
@@ -335,9 +337,9 @@ sub timeout {
     if($self->{close_on_idle} and !$timeout and !$self->has_work) {
         $self->{quitting} = 1;
         #use Data::Dumper; print Dumper($self->{timeouts}, $timeout);
-        print "timeout: no more work\n" if $DEBUG;
+        debug("timeout: no more work");
         foreach my $fh (values %{$self->{fhs}}) {
-            print "kill $fh\n" if $TRACE;
+            trace("kill $fh");
             $self->{mux}->kill($fh);
         }
     }
@@ -404,7 +406,7 @@ sub connect {
         $mux->add($fh);
         $mux->add($stdout);
         $mux->add($stderr);
-        print "Added $fh, OUT:$stdout, ERR:$stderr\n" if $TRACE;
+        trace("Added $fh, OUT:$stdout, ERR:$stderr");
         $self->{connect_args}{$fh} = [$url, @args];
         
         return $fh;
@@ -474,8 +476,7 @@ sub io {
     
     # Check if this fh is handled by RPC
     if(exists $self->{fhs}{$fh}) {
-        print "client io: $type\n" if $TRACE;
-        #print "fh: $fh\n" if $fh;
+        trace("client io: $type");
 
         if($type eq 'read') {
             # DeSerialize and call callbacks 
@@ -483,7 +484,7 @@ sub io {
             # TODO: Check for RPC: call to limit 
             if($@) {
                 if(ref $@ eq '' and $@ =~ /^RPC:/) {
-                    print "killed connection because of '$@'\n";
+                    error("killed connection because of '$@'");
                     # Try to reconnect if this was unexpected
                     $mux->kill($fh);
                     $self->_try_reconnect($fh, 'read');
@@ -499,7 +500,7 @@ sub io {
        
             # Check if all extra fh's are closed for this server 
             if(keys %{$self->{extra_fhs}{$fh}} == 0) {
-                print "main: last file handle for this server\n" if $DEBUG;
+                debug("main: last file handle for this server");
                 # Collect server pid
                 $self->_waitpid_timeout($fh, $self->{waitpid_timeout}, 1);
             
@@ -511,7 +512,7 @@ sub io {
 
         } elsif($type eq 'error') {
             # Close the server if the connection is closed
-            print Dumper({error_event => $event}) if $DEBUG;
+            debug(Dumper({error_event => $event}));
             # Try to reconnect if this was unexpected
             $mux->kill($fh);
             $self->_try_reconnect($fh, 'errro');
@@ -529,7 +530,7 @@ sub io {
 
             # Check if all extra fh's are close for this server 
             if(keys %{$self->{extra_fhs}{$item->[0]}} == 0) {
-                print "extra: last file handle for this server\n" if $DEBUG;
+                debug("extra: last file handle for this server");
                 # Collect pid for this server
                 $self->_waitpid_timeout($item->[0], 
                     $self->{waitpid_timeout}, 1);
@@ -733,7 +734,7 @@ sub _waitpid_timeout {
     my $pid = $self->{pids}{$fh} or return;
 
     while(my $id = shift @{$self->{waitpid_ids}{$fh}}) {
-        print "delete $id\n" if $DEBUG;
+        debug("delete $id");
         delete $self->{requests}{$id};
     }
 
@@ -747,7 +748,7 @@ sub _waitpid_timeout {
     };
     queue_timeout($self->{timeouts}, time + $timeout, $id);
     push(@{$self->{waitpid_ids}{$fh}}, $id);
-    print "waitpid id: $id\n" if $DEBUG;
+    debug("waitpid id: $id");
 }
 
 sub _waitpid {
@@ -756,7 +757,7 @@ sub _waitpid {
     
     my $res = waitpid($pid, 1); # WNOHANG
     my $status = $? >> 8;
-    print "waitpid($pid): $status - $res\n" if $DEBUG;
+    debug("waitpid($pid): $status - $res");
 
     if($pid != $res) {
         $self->_kill($fh, $signal, $last_signal);
@@ -764,7 +765,7 @@ sub _waitpid {
         delete $self->{pids}{$fh};
         # Delete the id waiting in requests if we cought the waitpid before
         while(my $id = shift @{$self->{waitpid_ids}{$fh}}) {
-            print "collected pid $pid on id $id\n" if $DEBUG;
+            debug("collected pid $pid on id $id");
             delete $self->{requests}{$id};
         }
     }
@@ -784,7 +785,7 @@ sub _kill_timeout {
     };
     queue_timeout($self->{timeouts}, time + $timeout, $id);
     push(@{$self->{waitpid_ids}{$fh}}, $id);
-    print "kill id: $id\n" if $DEBUG;
+    debug("kill id: $id");
 }
 
 sub _kill {
@@ -796,7 +797,7 @@ sub _kill {
 
     # Kill pid 
     kill $signal, $pid; 
-    print "kill($signal, $pid)\n" if $DEBUG;
+    debug("kill($signal, $pid)");
     
     # Try to waitpid and kill with 9 if that did not work
     $self->_waitpid_timeout($fh, $self->{kill_timeout}, 9, $signal);
@@ -806,7 +807,7 @@ sub _try_reconnect {
     my ($self, $fh, $type) = @_;
     my $connect_args = $self->{connect_args}{$fh};
 
-    print "try_reconnect($type): $fh\n" if $TRACE;
+    debug("try_reconnect($type): $fh");
     
     # Close server filehandle and put requests back in waiting queue
     $self->_close($fh); 
@@ -814,7 +815,7 @@ sub _try_reconnect {
     # Try reconnection if we have requests waiting
     if ($connect_args and !$self->{quitting}) {
         if(--$self->{connect_retries} > 0) {
-            print "reconnect($type): $connect_args->[0]\n";
+            debug("reconnect($type): $connect_args->[0]");
             $self->connect(@{$connect_args});
         } else {
             $self->{quitting} = 1;
