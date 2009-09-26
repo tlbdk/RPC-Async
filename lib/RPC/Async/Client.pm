@@ -395,19 +395,32 @@ sub connect {
     my($self, $url, @args) = @_;
     my $mux = $self->{mux};
 
-    if($url =~ /perl(?:root)?2/) {
-        my ($fh, $pid, $stdout, $stderr) = url_connect($url, @args);
-        $self->add($fh, 
-            Pid => $pid, 
-            Streams => {
-                stdout => $stdout,
-                stderr => $stderr,
-            },
-        );
+    if($url =~ /perl(?:root)?(2)?/) {
+        my ($fh, $pid);
+
+        if($1) {
+            # Also open STDOUT and STDERR so we get server output
+            my ($stdout, $stderr);
+            ($fh, $pid, $stdout, $stderr) = url_connect($url, @args);
+            $self->add($fh, 
+                Pid => $pid, 
+                Streams => {
+                    stdout => $stdout,
+                    stderr => $stderr,
+                },
+            );
+            $mux->add($stdout);
+            $mux->add($stderr);
+            trace("Added $fh, OUT:$stdout, ERR:$stderr");
+        
+        } else {
+            ($fh, $pid) = url_connect($url, @args);
+            $self->add($fh, 
+                Pid => $pid, 
+            );
+        }
+        
         $mux->add($fh);
-        $mux->add($stdout);
-        $mux->add($stderr);
-        trace("Added $fh, OUT:$stdout, ERR:$stderr");
         $self->{connect_args}{$fh} = [$url, @args];
         
         return $fh;
