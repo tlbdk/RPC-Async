@@ -3,6 +3,8 @@ use strict;
 use warnings;
 use Carp;
 
+use Misc::Logger;
+
 # TODO: Validate that we catch exceptions when ever we do a callback
 
 our $VERSION = '2.00';
@@ -242,7 +244,7 @@ All schedule retry functions are delete on C<return()> to $caller.
 sub retry {
     my ($self, $caller, $timeout, $callback) = @_;
 
-    print "Called retry on $caller for $timeout\n" if $TRACE;
+    trace("Called retry on $caller for $timeout");
 
     croak "caller is not an array ref" if ref $caller ne 'ARRAY';
     croak "callback is a coderef" if ref $callback ne 'CODE';
@@ -279,7 +281,7 @@ sub timeout {
                 eval { $retry->[1]->($retry->[0]); };
                 if($@) {
                     if(ref $@ eq '' and $@ =~ /^CLIENT:\s*(.*?)\.?\n?$/s) {
-                        print "Send croak to client\n" if $TRACE;
+                        trace("Send croak to client");
                         $self->error($retry->[0], $1);
                     } else {
                         CORE::die($@);
@@ -298,7 +300,7 @@ sub timeout {
     # Send outstanding rpc packets
     my $mux = $self->{mux};
     while (my ($fh, $data) = $self->_data()) {
-        print "Sending packed data: $fh\n" if $TRACE;
+        trace("Sending packed data: $fh");
         $mux->send($fh, $data);
     }
 
@@ -456,14 +458,14 @@ sub io {
     #use Data::Dumper; print Dumper($event);
 
     if(exists $self->{fhs}{$fh}) {
-        print "server io: $type\n" if $TRACE;
+        trace("server io: $type");
 
         if($type eq 'read') {
             # DeSerialize and call callbacks 
             eval { $self->_append($event->{fh}, $event->{data}); };
             if($@) {
                 if(ref $@ eq '' and $@ =~ /^RPC:/) {
-                    print "killed connection because of '$@\'n";
+                    error("killed connection because of '$@'");
                     $self->_close($fh); # Close client and drop outstanding requests
                     $mux->kill($fh);
                 } else {
@@ -484,7 +486,7 @@ sub io {
         return 1;
     
     } elsif($type eq 'accepted' and exists $self->{fhs}{$event->{parent_fh}}) {
-        print "Added $fh from parent_fh $fh\n" if $TRACE;
+        trace("Added $fh from parent_fh $fh");
         $self->add($fh);
 
     } else {
@@ -595,7 +597,7 @@ sub _data {
     if(my $response = shift @{$self->{waiting}}) {
         my($fh, $client_id, $type, @args) = @{$response};
         
-        print "$fh : $client_id, $type\n" if $TRACE;
+        trace("$fh : $client_id, $type");
         
         # Skip this response if nobody wants it
         return if !exists $self->{fhs}{$fh};

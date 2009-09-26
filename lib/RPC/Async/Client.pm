@@ -1,6 +1,7 @@
 package RPC::Async::Client;
 use strict;
 use warnings;
+use Carp;
 
 use Misc::Logger;
 
