@@ -1,13 +1,16 @@
 use strict;
 use warnings;
 
-use Test::More tests => 3;
+use Test::More tests => 5;
 use RPC::Async::Client;
 use IO::EventMux;
 
 # Might not always work
 
 my $mux = new IO::EventMux();
+
+use Log::Sensible;
+#Log::Sensible::level('trace');
 
 my $rpc = RPC::Async::Client->new( 
     Mux => $mux,
@@ -21,6 +24,16 @@ my $rpc = RPC::Async::Client->new(
                 "The server dies with an error as it should");
         }
         print "$type($fh)\: '$str'\n";
+    },
+    OnRestart => sub {
+        my($trying, $reason) = @_;
+        if($trying) {
+            cmp_ok($reason, "=~", "fh is closing",
+                "We try restarting");
+        } else {
+            cmp_ok($reason, "=~", "no more retries",
+                "We fail restarting because no more retries");
+        }
     },
     Retries => 0,
 );

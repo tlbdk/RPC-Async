@@ -7,10 +7,6 @@ use Log::Sensible;
 
 our $VERSION = '2.00';
 
-my $DEBUG = 0;
-my $TRACE = 0;
-my $INFO = 0;
-
 # TODO: Retries should be able to limited to a number of retries
 # within a period of time. Eg. You can fail 3 times in 1 hour, a quick way to
 # implement this would be a timeout that resets the retries after number of
@@ -223,6 +219,16 @@ sub new {
         waitpid_ids => {}, # { $fh => $id }
 
         filter_args => $args{EncodeError} ? 0 : 1,
+        
+        _on_restart => ref $args{OnRestart} eq 'CODE' 
+            ? $args{OnRestart}
+            : sub {
+                if($_[0]) {
+                    warning("Restarting because of $_[1]");
+                } else {
+                    fatal("Could not restart because of $_[1]");
+                }
+            },
 
         _output => ref $args{Output} eq 'CODE' 
             ? $args{Output}
@@ -503,7 +509,7 @@ sub io {
                     error("killed connection because of '$@'");
                     # Try to reconnect if this was unexpected
                     $mux->kill($fh);
-                    $self->_try_reconnect($fh, 'read');
+                    $self->_try_reconnect($fh, "read error : $@");
                 } else {
                     # Rethrow exception
                     CORE::die $@;
@@ -511,8 +517,9 @@ sub io {
             }
 
         } elsif($type eq 'closing' or $type eq 'closed') {
+            debug("$type $fh");
             # Try to reconnect if this was unexpected
-            $self->_try_reconnect($fh, 'closing');
+            $self->_try_reconnect($fh, 'fh is closing or closed');
        
             # Check if all extra fh's are closed for this server 
             if(keys %{$self->{extra_fhs}{$fh}} == 0) {
@@ -521,6 +528,7 @@ sub io {
                 $self->_waitpid_timeout($fh, $self->{waitpid_timeout}, 1);
             
             } elsif(my $timeout = $self->{close_timeout}) {
+                debug("extra fhs are open, so wait $timeout");
                 # Kill the server
                 $self->_kill_timeout($fh, $timeout, 1);
             }
@@ -531,7 +539,7 @@ sub io {
             debug(Dumper({error_event => $event}));
             # Try to reconnect if this was unexpected
             $mux->kill($fh);
-            $self->_try_reconnect($fh, 'errro');
+            $self->_try_reconnect($fh, "got error $event->{error}");
         }
         
         return 1;
@@ -696,7 +704,7 @@ sub _append {
             }
 
         } else {
-            warning "Spurious reply to id $id\n" if $DEBUG;
+            debug "Spurious reply to id $id\n";
         }
     }
 
@@ -823,15 +831,18 @@ sub _try_reconnect {
     my ($self, $fh, $type) = @_;
     my $connect_args = $self->{connect_args}{$fh};
 
+    # Don't retry connect when we are quitting
+    return if $self->{quitting}; 
+
     debug("try_reconnect($type): $fh");
     
     # Close server filehandle and put requests back in waiting queue
     $self->_close($fh); 
    
-    # Try reconnection if we have requests waiting
-    if ($connect_args and !$self->{quitting}) {
+    # Try reconnection if we know how and are not quitting
+    $self->{_on_restart}->(1, $type);
+    if ($connect_args) {
         if(--$self->{connect_retries} > 0) {
-            debug("reconnect($type): $connect_args->[0]");
             $self->connect(@{$connect_args});
         } else {
             $self->{quitting} = 1;
@@ -843,9 +854,11 @@ sub _try_reconnect {
             }
             # Empty waiting so we don't try to send some data
             $self->{waiting} = [];
+            $self->{_on_restart}->(0, "no more retries");
         }
     } else {
         $self->{quitting} = 1;
+        $self->{_on_restart}->(0, "no connect args");
     }
 }
 

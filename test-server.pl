@@ -30,7 +30,7 @@ $rpc->set_options("server_timeout", Timeout => 1); # Return a timeout after 1 se
 # FIXME: Implement
 $rpc->set_options("non_delayed", DelayedReturn => 0); # Make normal return, return to client
 
-# Add cleanup code for @client_meta
+# TODO: Add cleanup code for @client_meta
 my @client_meta;
 $rpc->on_close(\@client_meta, sub {
     # ($caller, @args) = @_;
