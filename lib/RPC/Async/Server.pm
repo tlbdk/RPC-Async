@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use Carp;
 
-use Misc::Logger qw(trace debug warning info fatal);
+use Log::Sensible qw(trace debug warning info fatal);
 
 # TODO: Validate that we catch exceptions when ever we do a callback
 
@@ -461,7 +461,7 @@ sub io {
             eval { $self->_append($event->{fh}, $event->{data}); };
             if($@) {
                 if(ref $@ eq '' and $@ =~ /^RPC:/) {
-                    Misc::Logger::error("killed connection because of '$@'");
+                    Log::Sensible::error("killed connection because of '$@'");
                     $self->_close($fh); # Close client and drop outstanding requests
                     $mux->kill($fh);
                 } else {

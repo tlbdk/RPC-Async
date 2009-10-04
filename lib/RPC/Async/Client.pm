@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use Carp;
 
-use Misc::Logger;
+use Log::Sensible;
 
 our $VERSION = '2.00';
 
@@ -696,7 +696,7 @@ sub _append {
             }
 
         } else {
-            warn "Spurious reply to id $id\n" if $DEBUG;
+            warning "Spurious reply to id $id\n" if $DEBUG;
         }
     }
 
