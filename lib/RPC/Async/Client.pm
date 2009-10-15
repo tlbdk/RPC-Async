@@ -215,6 +215,7 @@ sub new {
             $args{WaitPidTimeout} : 1,
         kill_timeout => defined $args{KillTimeout} ? $args{KillTimeout} : 1,
         
+        pid_errors => {}, # { $fh => $error, ... }
         pids => {}, # { $fh => $pid, ... }
         waitpid_ids => {}, # { $fh => $id }
 
@@ -785,7 +786,13 @@ sub _waitpid {
 
     if($pid != $res) {
         $self->_kill($fh, $signal, $last_signal);
+    
     } else {
+        # If all retries to restart the server failed, give exit status
+        if(my $error = delete $self->{pid_errors}{$fh}) {
+            $self->{_on_restart}->(@{$error}, $status);
+        }
+        
         delete $self->{pids}{$fh};
         # Delete the id waiting in requests if we cought the waitpid before
         while(my $id = shift @{$self->{waitpid_ids}{$fh}}) {
@@ -840,25 +847,47 @@ sub _try_reconnect {
     $self->_close($fh); 
    
     # Try reconnection if we know how and are not quitting
-    $self->{_on_restart}->(1, $type);
     if ($connect_args) {
-        if(--$self->{connect_retries} > 0) {
+        if($self->{connect_retries}-- > 0) {
+            # Notify that we are trying to restart 
+            $self->_on_restart($fh, 1, $type);
+           
+            # Try to connect again
             $self->connect(@{$connect_args});
+        
         } else {
             $self->{quitting} = 1;
+
+            # Notify that we can't restart  
+            $self->_on_restart($fh, 0, "no more retries and $type");
+
+            # Return "no more connect retries" to all callbacks
             foreach my $id (keys %{$self->{requests}}) {
                 my $request = delete $self->{requests}{$id};
                 
                 $@ = 'no more connect retries';
                 $request->{callback}->();
             }
+
             # Empty waiting so we don't try to send some data
-            $self->{waiting} = [];
-            $self->{_on_restart}->(0, "no more retries");
+            $self->{waiting} = [];    
         }
+
     } else {
         $self->{quitting} = 1;
-        $self->{_on_restart}->(0, "no connect args");
+        $self->_on_restart($fh, 0, "no connect args and $type");
+    }
+}
+
+sub _on_restart {
+    my($self, $fh, $trying, $msg) = @_;
+
+    # Check if we have to wait for exit status
+    if(exists $self->{pids}{$fh}) { 
+        $self->{pid_errors}{$fh} = [$trying, $msg];
+
+    } else {
+        $self->{_on_restart}->($trying, $msg);
     }
 }
 

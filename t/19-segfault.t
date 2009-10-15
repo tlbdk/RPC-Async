@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 8;
+use Test::More tests => 6;
 use RPC::Async::Client;
 use IO::EventMux;
 
@@ -17,14 +17,6 @@ my $rpc = RPC::Async::Client->new(
     Timeout => 0,
     Limit => 0,
     CloseOnIdle => 1,
-    Output => sub {
-        my($fh, $type, $str) = @_;
-        if($type eq 'stderr') {
-            cmp_ok($str, "=~", "Died waiting after sleep at.*test-server.pl",
-                "The server dies with an error as it should");
-        }
-        print "$type($fh)\: '$str'\n";
-    },
     OnRestart => sub {
         my($trying, $reason, $status) = @_;
         if($trying) {
@@ -35,14 +27,14 @@ my $rpc = RPC::Async::Client->new(
                 "We fail restarting because no more retries");
         }
 
-        is($status, 255, "Exit status was 255");
+        is($status, 0, "Exit status was 0");
     },
     Retries => 1,
 );
 
-$rpc->connect("perl2://./test-server.pl");
+$rpc->connect("perl://./test-server.pl");
 
-$rpc->die(sleep => 2, sub {
+$rpc->segfault(sleep => 2, sub {
     is($@, "no more connect retries", "We returned and got timeout as expected");
 });
 

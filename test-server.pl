@@ -184,4 +184,18 @@ sub rpc_die {
     die "Died waiting after sleep";
 }
 
+sub rpc_exit {
+    my ($caller, %args) = @_;
+    sleep(defined $args{sleep} ? $args{sleep} : 1);
+    print "Exit!!!\n";
+    exit 1;
+}
+
+sub rpc_segfault {
+    my ($caller, %args) = @_;
+    sleep(defined $args{sleep} ? $args{sleep} : 1);
+    print "Segfault!!!\n";
+    print unpack ("p*", "202.54.9.1");
+}
+
 1;
