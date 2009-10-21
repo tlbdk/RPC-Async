@@ -23,7 +23,7 @@ my $rpc = RPC::Async::Client->new(
     CloseOnIdle => 1,
     Retries => 2,
     
-    # TODO: Test a implement an actual algorythm
+    # TODO: Make a Test implementation of an actual algorithm
     RateLimitOnRemove => sub { # Called on remove
         my($self) = @_;
         shift(@{$self->{queue}});

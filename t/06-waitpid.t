@@ -10,6 +10,9 @@ use IO::EventMux;
 
 use Data::Dumper;
 
+use Log::Sensible;
+Log::Sensible::level('trace');
+
 # TODO: Make good test to see everything is done in the correct order
 
 # Needed when writing to a broken pipe 
