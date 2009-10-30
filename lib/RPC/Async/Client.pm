@@ -404,7 +404,7 @@ sub connect {
     my($self, $url, @args) = @_;
     my $mux = $self->{mux};
 
-    if($url =~ /perl(?:root)?(2)?/) {
+    if($url =~ /perl(?:root)?(2)?(?:header)?/) {
         my ($fh, $pid);
 
         if($1) {
@@ -433,6 +433,7 @@ sub connect {
         $self->{connect_args}{$fh} = [$url, @args];
         
         return $fh;
+    
     } else {
         croak "unknown url type : $url";
     }
@@ -464,16 +465,15 @@ sub add {
     # Reset quitting as we are now adding a new server
     $self->{quitting} = 0;
 
-    if(keys %args) {
-        if($args{Pid}) {
-            $self->{pids}{$fh} = $args{Pid};
-        }
-        if($args{Streams}) {
-            foreach my $type (keys %{$args{Streams}}) {
-                my $stream_fh = $args{Streams}{$type};
-                $self->{extra_streams}{$stream_fh} = [$fh, $type];
-                $self->{extra_fhs}{$fh}{$stream_fh} = $type;
-            }
+    if($args{Pid}) {
+        $self->{pids}{$fh} = $args{Pid};
+    }
+    
+    if($args{Streams}) {
+        foreach my $type (keys %{$args{Streams}}) {
+            my $stream_fh = $args{Streams}{$type};
+            $self->{extra_streams}{$stream_fh} = [$fh, $type];
+            $self->{extra_fhs}{$fh}{$stream_fh} = $type;
         }
     }
     
@@ -518,9 +518,13 @@ sub io {
             }
 
         } elsif($type eq 'closing' or $type eq 'closed') {
-            debug("$type $fh");
+            debug("io(closing/closed): $type $fh");
+
+            # Get reason the fh was closed
+            my $reason = defined $event->{reason} ? ": $event->{reason}" : '';
+
             # Try to reconnect if this was unexpected
-            $self->_try_reconnect($fh, 'fh is closing or closed');
+            $self->_try_reconnect($fh, 'fh is closing or closed'.$reason );
        
             # Check if all extra fh's are closed for this server 
             if(keys %{$self->{extra_fhs}{$fh}} == 0) {
@@ -538,9 +542,9 @@ sub io {
         } elsif($type eq 'error') {
             # Close the server if the connection is closed
             debug(Dumper({error_event => $event}));
+            
             # Try to reconnect if this was unexpected
-            $mux->kill($fh);
-            $self->_try_reconnect($fh, "got error $event->{error}");
+            $mux->kill($fh, $event->{error});
         }
         
         return 1;
@@ -874,8 +878,20 @@ sub _try_reconnect {
         }
 
     } else {
+        trace "no connect args";
         $self->{quitting} = 1;
         $self->_on_restart($fh, 0, "no connect args and $type");
+
+        # Return "no more connect retries" to all callbacks
+        foreach my $id (keys %{$self->{requests}}) {
+            my $request = delete $self->{requests}{$id};
+
+            $@ = 'no more connect retries';
+            $request->{callback}->();
+        }
+
+        # Empty waiting so we don't try to send some data
+        $self->{waiting} = [];    
     }
 }
 
@@ -884,6 +900,7 @@ sub _on_restart {
 
     # Check if we have to wait for exit status
     if(exists $self->{pids}{$fh}) { 
+        trace "_on_restart: wait for exit status";
         $self->{pid_errors}{$fh} = [$trying, $msg];
 
     } else {
