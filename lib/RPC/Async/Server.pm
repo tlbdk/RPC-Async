@@ -300,7 +300,8 @@ sub timeout {
         $mux->send($fh, $data);
     }
 
-    #use Data::Dumper; print Dumper($timeouts, $self->{retries}, $self->{waiting});
+    #use Data::Dumper; print Dumper($timeouts, $self->{retries},
+    #    $self->{waiting}, $self->{callers});
     #print("timeout(".time()."): ".(defined $timeout ? $timeout : 'undef')."\n");
     
     return $timeout;
@@ -602,6 +603,7 @@ sub _data {
         while(my $id = shift @{$self->{callers}{$fh}{$client_id} or []}) {
             delete $self->{retries}{$id};
         }
+        delete $self->{callers}{$fh}{$client_id}; 
 
         # Serialize and encode data
         my $args = encode_args($self, \@args, $self->{filter_args});
