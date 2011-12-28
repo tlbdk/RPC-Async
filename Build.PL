@@ -14,6 +14,7 @@ my $builder = Module::Build->new(
         'IO::EventMux'     => '>= 2.02',
         'Privileges::Drop' => 0,
         'File::Basename'   => 0,
+        'Class::ISA'       => 0,
     },
     build_requires => {
         'Test::More' => 0,
